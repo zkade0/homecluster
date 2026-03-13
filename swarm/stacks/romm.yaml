@@ -27,7 +27,7 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.labels.homelab.hostname == k8s-1
+          - node.labels.homelab.romm == true
       labels:
         - traefik.enable=true
         - traefik.swarm.network=edge
@@ -68,7 +68,7 @@ services:
       replicas: 1
       placement:
         constraints:
-          - node.labels.homelab.hostname == k8s-1
+          - node.labels.homelab.romm == true
       restart_policy:
         condition: any
 

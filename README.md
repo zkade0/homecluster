@@ -27,6 +27,17 @@ This repo now uses a NixOS-first provisioning workflow and Docker Swarm for serv
 - `scripts/`: bootstrap/deploy automation for NixOS and Swarm
 - `docs/`: operational runbooks
 
+## Documentation Map
+
+- `docs/INDEX.md`: doc index and quick navigation
+- `docs/ARCHITECTURE.md`: cluster architecture summary
+- `docs/NIXOS-DEPLOY.md`: bootstrap and deployment flow
+- `docs/OPERATIONS.md`: day-2 operations commands
+- `docs/SERVICE-CATALOG.md`: route and stack ownership map
+- `docs/BACKUP-RESTORE.md`: backup and restore runbook
+- `docs/SECRETS-SOPS.md`: secret management with SOPS/age
+- `docs/SWARM-RECONCILE.md`: reconcile pipeline details
+
 ## Quick start (NixOS + Swarm)
 
 Detailed steps: `docs/NIXOS-DEPLOY.md`

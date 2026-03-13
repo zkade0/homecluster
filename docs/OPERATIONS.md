@@ -1,18 +1,49 @@
 # Operations Notes
 
+## Related Runbooks
+
+- `docs/INDEX.md`
+- `docs/SERVICE-CATALOG.md`
+- `docs/BACKUP-RESTORE.md`
+- `docs/SECRETS-SOPS.md`
+
 ## Useful commands
 
 ```bash
 make swarm-bootstrap
-make swarm-sync-secrets
+SOPS_AGE_KEY_FILE=./age.agekey make swarm-sync-secrets
 make swarm-deploy
 make swarm-deploy-monitoring
+make swarm-deploy-backups
 make swarm-reconcile
 
 ssh root@192.168.8.5 'docker node ls'
 ssh root@192.168.8.5 'docker service ls'
 ssh root@192.168.8.5 'docker service ps homelab_traefik'
 ssh root@192.168.8.5 'docker service logs --tail 100 homelab_traefik'
+```
+
+## Backup service checks
+
+```bash
+ssh root@192.168.8.5 'docker service ls | grep backups'
+ssh root@192.168.8.5 'docker service ps backups_restic-backup --no-trunc'
+ssh root@192.168.8.5 'docker service logs --tail 200 backups_restic-backup'
+```
+
+## Move RomM Pair Together
+
+`romm_romm` and `romm_romm-db` are constrained by the shared node label `homelab.romm == true`.
+Set this label on exactly one node so both services stay together and can move as a pair.
+
+```bash
+# Example: move both services to k8s-2
+ssh root@192.168.8.5 'docker node update --label-rm homelab.romm k8s-0 || true'
+ssh root@192.168.8.5 'docker node update --label-rm homelab.romm k8s-1 || true'
+ssh root@192.168.8.5 'docker node update --label-add homelab.romm=true k8s-2'
+
+# Reconcile the RomM stack
+make swarm-deploy-romm
 ```
 
 ## Update stack env

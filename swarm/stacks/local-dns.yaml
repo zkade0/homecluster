@@ -20,7 +20,7 @@ services:
         protocol: tcp
         mode: host
     # DNS is exposed directly; Web UI is only exposed through Traefik.
-    # Single active task + Swarm ingress routing mesh keeps 192.168.8.10 stable.
+    # Keep one active task, but allow it to run on any Linux node (no hostname pin).
     networks:
       - edge
     volumes:
@@ -31,7 +31,6 @@ services:
       placement:
         constraints:
           - node.platform.os == linux
-          - node.hostname == k8s-0
       update_config:
         order: stop-first
         parallelism: 1

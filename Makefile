@@ -11,6 +11,8 @@ help:
 	@echo "  swarm-deploy-traefik Deploy Traefik ingress stack to Swarm"
 	@echo "  swarm-deploy-romm   Deploy RomM stack to Swarm"
 	@echo "  swarm-deploy-speedtest Deploy LibreSpeed Rust stack to Swarm"
+	@echo "  swarm-deploy-uptime-kuma Deploy Uptime Kuma stack to Swarm"
+	@echo "  swarm-deploy-backups Deploy Restic backup stack to Swarm"
 	@echo "  swarm-deploy-paperless Deploy Paperless-ngx stack to Swarm"
 	@echo "  swarm-deploy-local-dns Deploy Technitium DNS stack to Swarm (compat target)"
 	@echo "  swarm-deploy-technitium-dns Deploy Technitium DNS stack to Swarm"
@@ -68,6 +70,18 @@ swarm-deploy-speedtest:
 	STACK_FILE="$(or $(STACK_FILE),swarm/stacks/speedtest.yaml)" STACK_NAME="$(or $(STACK_NAME),speedtest)" ENV_FILE="$(or $(ENV_FILE),swarm/env/cluster.env)" \
 	MANAGER_HOST="$(or $(MANAGER_HOST),k8s-0)" MANAGER_SSH="$(MANAGER_SSH)" SSH_KEY_FILE="$(SSH_KEY_FILE)" \
 	SYNC_SECRETS=0 ./scripts/swarm-deploy.sh
+
+.PHONY: swarm-deploy-uptime-kuma
+swarm-deploy-uptime-kuma:
+	STACK_FILE="$(or $(STACK_FILE),swarm/stacks/uptime-kuma.yaml)" STACK_NAME="$(or $(STACK_NAME),uptime-kuma)" ENV_FILE="$(or $(ENV_FILE),swarm/env/cluster.env)" \
+	MANAGER_HOST="$(or $(MANAGER_HOST),k8s-0)" MANAGER_SSH="$(MANAGER_SSH)" SSH_KEY_FILE="$(SSH_KEY_FILE)" \
+	SYNC_SECRETS=0 ./scripts/swarm-deploy.sh
+
+.PHONY: swarm-deploy-backups
+swarm-deploy-backups:
+	STACK_FILE="$(or $(STACK_FILE),swarm/stacks/backups.yaml)" STACK_NAME="$(or $(STACK_NAME),backups)" ENV_FILE="$(or $(ENV_FILE),swarm/env/cluster.env)" \
+	MANAGER_HOST="$(or $(MANAGER_HOST),k8s-0)" MANAGER_SSH="$(MANAGER_SSH)" SSH_KEY_FILE="$(SSH_KEY_FILE)" \
+	SYNC_SECRETS="$(or $(SYNC_SECRETS),1)" ./scripts/swarm-deploy.sh
 
 .PHONY: swarm-deploy-paperless
 swarm-deploy-paperless:

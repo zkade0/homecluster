@@ -17,6 +17,7 @@ services:
       placement:
         constraints:
           - node.platform.os == linux
+          - node.labels.homelab.paperless == true
       restart_policy:
         condition: on-failure
 
@@ -33,6 +34,7 @@ services:
       placement:
         constraints:
           - node.platform.os == linux
+          - node.labels.homelab.paperless == true
       restart_policy:
         condition: on-failure
 
@@ -45,6 +47,7 @@ services:
       placement:
         constraints:
           - node.platform.os == linux
+          - node.labels.homelab.paperless == true
       restart_policy:
         condition: on-failure
 
@@ -74,6 +77,7 @@ services:
       placement:
         constraints:
           - node.platform.os == linux
+          - node.labels.homelab.paperless == true
       restart_policy:
         condition: on-failure
       update_config:

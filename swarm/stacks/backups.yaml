@@ -1,0 +1,91 @@
+services:
+  restic-backup:
+    image: restic/restic:0.17.3
+    environment:
+      TZ: ${TIMEZONE}
+      RESTIC_REPOSITORY: /restic-repo/homelab
+      RESTIC_CACHE_DIR: /restic-cache
+      RESTIC_PASSWORD_FILE: /run/secrets/restic_password
+      RESTIC_MAX_REPO_BYTES: ${RESTIC_MAX_REPO_BYTES}
+    volumes:
+      - restic_source_data:/source:ro
+      - restic_repo:/restic-repo
+      - restic_cache:/restic-cache
+    secrets:
+      - source: homelab_restic_password
+        target: restic_password
+        mode: 0400
+    entrypoint:
+      - /bin/sh
+      - -ec
+    command:
+      - |
+        set -eu
+
+        # Ensure the repository exists on first run.
+        if ! restic snapshots >/dev/null 2>&1; then
+          restic init || true
+        fi
+
+        while true; do
+          echo "[`date -u +%FT%TZ`] Running restic backup"
+          restic unlock || true
+          restic backup /source \
+            --one-file-system \
+            --exclude /source/lost+found \
+            --exclude /source/restic \
+            --exclude /source/.backup-staging
+
+          echo "[`date -u +%FT%TZ`] Applying restic retention policy"
+          restic forget --group-by '' --prune \
+            --keep-daily ${RESTIC_KEEP_DAILY} \
+            --keep-weekly ${RESTIC_KEEP_WEEKLY} \
+            --keep-monthly ${RESTIC_KEEP_MONTHLY}
+
+          if [ "$$(du -sb /restic-repo/homelab 2>/dev/null | awk '{print $$1+0}')" -gt "${RESTIC_MAX_REPO_BYTES}" ]; then
+            echo "[`date -u +%FT%TZ`] Repo cap exceeded; trimming to cap ${RESTIC_MAX_REPO_BYTES} bytes."
+            while [ "$$(du -sb /restic-repo/homelab 2>/dev/null | awk '{print $$1+0}')" -gt "${RESTIC_MAX_REPO_BYTES}" ] \
+              && [ "$$(restic snapshots --group-by '' --compact | awk '$$1 ~ /^[0-9a-f]+$$/ {c++} END {print c+0}')" -gt 1 ]; do
+              restic forget --group-by '' \
+                --keep-last "$$(( $$(restic snapshots --group-by '' --compact | awk '$$1 ~ /^[0-9a-f]+$$/ {c++} END {print c+0}') - 1 ))" \
+                --prune
+            done
+            echo "[`date -u +%FT%TZ`] Repo cap check complete; current bytes: $$(du -sb /restic-repo/homelab 2>/dev/null | awk '{print $$1+0}')."
+          fi
+
+          echo "[`date -u +%FT%TZ`] Backup cycle complete; sleeping ${RESTIC_BACKUP_INTERVAL_SECONDS}s"
+          sleep ${RESTIC_BACKUP_INTERVAL_SECONDS}
+        done
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.platform.os == linux
+      update_config:
+        order: stop-first
+        parallelism: 1
+      restart_policy:
+        condition: any
+
+volumes:
+  restic_source_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/homelab-data
+
+  restic_repo:
+    driver: local
+    driver_opts:
+      type: nfs
+      o: addr=${BACKUP_NFS_SERVER},nfsvers=${BACKUP_NFS_VERSION},rw,hard,timeo=600,retrans=2
+      device: :${BACKUP_NFS_EXPORT}
+
+  restic_cache:
+    driver: local
+
+secrets:
+  homelab_restic_password:
+    external: true

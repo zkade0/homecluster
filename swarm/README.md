@@ -12,8 +12,10 @@ This directory is the active Layer 2 deployment path for homelab services.
 - `secrets/cluster-secrets.sops.yaml`: encrypted secret source for Swarm
 - `stacks/homelab.yaml`: main Swarm stack
 - `stacks/monitoring.yaml`: Prometheus + Grafana stack for split-stack deployments
-- `stacks/local-dns.yaml`: Technitium DNS stack (single replica, served via VIP)
+- `stacks/local-dns.yaml`: Technitium DNS stack (single replica, not hostname-pinned)
 - `stacks/speedtest.yaml`: LibreSpeed Rust stack (single replica behind Traefik)
+- `stacks/uptime-kuma.yaml`: Uptime Kuma stack (single replica with persistent SQLite data)
+- `stacks/backups.yaml`: Restic backup stack (single replica failover + NFS repository target)
 
 ## Deploy order
 
@@ -43,6 +45,10 @@ make swarm-reconcile SSH_KEY_FILE=~/.ssh/homelab-nixos-admin MANAGER_SSH=root@19
 ```
 
 Details: `docs/SWARM-RECONCILE.md`
+Reference docs:
+- `docs/SERVICE-CATALOG.md`
+- `docs/BACKUP-RESTORE.md`
+- `docs/SECRETS-SOPS.md`
 
 ## Domain setup
 
@@ -67,10 +73,42 @@ Recommended LAN client DNS behavior:
 - Do not set a public secondary DNS (for example `1.1.1.1`) if you want full per-client visibility/filtering in Technitium.
 - Technitium DNS is exposed on `53/tcp` and `53/udp` in host publish mode (preserves real client source IPs instead of Swarm `10.0.0.x` ingress addresses).
 - The Technitium web UI is published only through Traefik at `dns.admin.${BASE_DOMAIN}`.
-- Current stack pins Technitium to `k8s-0` so VIP `192.168.8.10` and host-published DNS stay aligned.
+- Technitium is not pinned to a specific node; if one node is drained/down, Swarm can reschedule DNS to another node.
 
 For HA without a VIP, advertise multiple Swarm node IPs as DNS servers in DHCP so clients can fail over between nodes.
 If you want DNS settings and zones synced between nodes, configure Technitium Cluster in the web UI after initial deploy.
+
+## Optional: Uptime Kuma
+
+Deploy:
+
+```bash
+make swarm-deploy-uptime-kuma
+```
+
+Route: `https://uptime.${BASE_DOMAIN}`
+
+## Optional: Backups (Restic -> NFS)
+
+Set these in `swarm/env/cluster.env` or `swarm/env/cluster.env.local`:
+- `BACKUP_NFS_SERVER` (for example `192.168.8.20`)
+- `BACKUP_NFS_EXPORT` (for example `/exports/homelab-backups`)
+- `BACKUP_NFS_VERSION` (for example `4.1`)
+- `RESTIC_BACKUP_INTERVAL_SECONDS`
+- `RESTIC_KEEP_DAILY`
+- `RESTIC_KEEP_WEEKLY`
+- `RESTIC_KEEP_MONTHLY`
+- `RESTIC_MAX_REPO_BYTES` (for example `2199023255552` for 2 TiB cap)
+
+Set `RESTIC_PASSWORD` in SOPS (`swarm/secrets/cluster-secrets.sops.yaml`), then deploy:
+
+```bash
+make swarm-deploy-backups
+```
+
+Behavior:
+- Backs up `/mnt/homelab-data` (Gluster mount) to NFS-backed restic repo.
+- Runs as one Swarm replica with no hostname pin, so it can reschedule on node failure.
 
 ## Security defaults in this stack
 

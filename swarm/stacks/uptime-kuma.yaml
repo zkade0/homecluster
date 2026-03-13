@@ -1,0 +1,52 @@
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    environment:
+      TZ: ${TIMEZONE}
+    dns:
+      - 192.168.8.10
+    networks:
+      - edge
+    volumes:
+      - uptime_kuma_data:/app/data
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - node.platform.os == linux
+          - node.hostname == k8s-0
+      update_config:
+        order: stop-first
+        parallelism: 1
+      restart_policy:
+        condition: any
+      labels:
+        - traefik.enable=true
+        - traefik.swarm.network=edge
+        - traefik.http.routers.uptime-kuma.rule=Host(`uptime.${BASE_DOMAIN}`)
+        - traefik.http.routers.uptime-kuma.entrypoints=web
+        - traefik.http.routers.uptime-kuma.middlewares=uptime-kuma-https-redirect
+        - traefik.http.middlewares.uptime-kuma-https-redirect.redirectscheme.scheme=https
+        - traefik.http.middlewares.uptime-kuma-https-redirect.redirectscheme.permanent=true
+        - traefik.http.routers.uptime-kuma-secure.rule=Host(`uptime.${BASE_DOMAIN}`)
+        - traefik.http.routers.uptime-kuma-secure.entrypoints=websecure
+        - traefik.http.routers.uptime-kuma-secure.tls=true
+        - traefik.http.routers.uptime-kuma-secure.service=uptime-kuma
+        - traefik.http.services.uptime-kuma.loadbalancer.server.port=3001
+
+volumes:
+  uptime_kuma_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/homelab-data/uptime-kuma/data
+    labels:
+      homelab.service: uptime-kuma
+      homelab.purpose: kuma-data
+      homelab.path: /app/data
+
+networks:
+  edge:
+    external: true

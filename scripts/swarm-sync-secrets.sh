@@ -72,6 +72,11 @@ extract_secret() {
   sops -d --extract "[\"stringData\"][\"${key}\"]" "${SOPS_SECRET_FILE}"
 }
 
+extract_secret_optional() {
+  local key="$1"
+  sops -d --extract "[\"stringData\"][\"${key}\"]" "${SOPS_SECRET_FILE}" 2>/dev/null || true
+}
+
 create_or_replace_secret() {
   local target="$1"
   local name="$2"
@@ -120,6 +125,15 @@ main() {
   create_or_replace_secret "${target}" "homelab_authentik_bootstrap_token" "$(extract_secret "AUTHENTIK_BOOTSTRAP_TOKEN")"
   create_or_replace_secret "${target}" "homelab_authentik_postgres_password" "$(extract_secret "AUTHENTIK_POSTGRES_PASSWORD")"
   create_or_replace_secret "${target}" "homelab_romm_db_password" "$(extract_secret "ROMM_DB_PASSWORD")"
+
+  local restic_password
+  restic_password="$(extract_secret_optional "RESTIC_PASSWORD")"
+
+  if [[ -n "${restic_password}" ]]; then
+    create_or_replace_secret "${target}" "homelab_restic_password" "${restic_password}"
+  else
+    echo "Secret RESTIC_PASSWORD not found in ${SOPS_SECRET_FILE}, skipping homelab_restic_password."
+  fi
 
   echo "Secret sync complete."
 }
