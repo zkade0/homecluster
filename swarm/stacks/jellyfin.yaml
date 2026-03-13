@@ -1,0 +1,73 @@
+services:
+  jellyfin:
+    image: jellyfin/jellyfin
+    volumes:
+    - jellyfin_config:/config
+    - jellyfin_cache:/cache
+    - type: bind
+      source: /mnt/homelab-data/jellyfin/movies
+      target: /movies
+    - type: bind
+      source: /mnt/homelab-data/jellyfin/tv
+      target: /tv
+      read_only: true
+    # - type: bind
+    #   source: /mnt/homelab-data/jellyfin/fonts
+    #   target: /usr/local/share/fonts/custom
+    #   read_only: true
+    environment:
+    - JELLYFIN_PublishedServerUrl=https://${STACK_NAME}.${BASE_DOMAIN}
+    - TZ=${TIMEZONE}
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    networks:
+    - edge
+    deploy:
+      labels:
+      - traefik.enable=true
+      - traefik.http.middlewares.jellyfin-https-redirect.redirectscheme.permanent=true
+      - traefik.http.middlewares.jellyfin-https-redirect.redirectscheme.scheme=https
+      - traefik.http.routers.jellyfin-secure.entrypoints=websecure
+      - traefik.http.routers.jellyfin-secure.rule=Host(`${STACK_NAME}.${BASE_DOMAIN}`)
+      - traefik.http.routers.jellyfin-secure.service=jellyfin
+      - traefik.http.routers.jellyfin-secure.tls=true
+      - traefik.http.routers.jellyfin.entrypoints=web
+      - traefik.http.routers.jellyfin.middlewares=jellyfin-https-redirect
+      - traefik.http.routers.jellyfin.rule=Host(`${STACK_NAME}.${BASE_DOMAIN}`)
+      - traefik.http.services.jellyfin.loadbalancer.server.port=8096
+      - traefik.swarm.network=edge
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+        - node.platform.os == linux
+        - node.hostname == k8s-0
+      restart_policy:
+        condition: any
+      update_config:
+        order: stop-first
+        parallelism: 1
+volumes:
+  jellyfin_config:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/homelab-data/jellyfin/jellyfin-config
+    labels:
+      homelab.service: jellyfin
+      homelab.purpose: jellyfin-config-data
+      homelab.path: /config
+  jellyfin_cache:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/homelab-data/jellyfin/jellyfin-cache
+    labels:
+      homelab.service: jellyfin
+      homelab.purpose: jellyfin-cache-data
+      homelab.path: /cache
+networks:
+  edge:
+    external: true

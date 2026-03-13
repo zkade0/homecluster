@@ -18,6 +18,7 @@ help:
 	@echo "  swarm-deploy-technitium-dns Deploy Technitium DNS stack to Swarm"
 	@echo "  swarm-deploy-monitoring Deploy Prometheus + Grafana monitoring stack"
 	@echo "  swarm-reconcile     Flux-like manual reconcile for Swarm stacks (deploy+verify+rollback)"
+	@echo "  swarm-onboard-from-compose Convert compose -> swarm stack, upsert DNS, and reconcile deploy"
 	@echo "  swarm-deploy-apps   Deploy Portainer + RomM as separate stacks"
 	@echo "  nixos-build         Build one NixOS host config (HOST=k8s-0|k8s-1|k8s-2)"
 	@echo "  nixos-bootstrap     Password bootstrap -> managed SSH key -> deploy"
@@ -114,6 +115,21 @@ swarm-reconcile:
 	DEPLOY_TIMEOUT="$(or $(DEPLOY_TIMEOUT),180)" POLL_INTERVAL="$(or $(POLL_INTERVAL),5)" DRY_RUN="$(or $(DRY_RUN),0)" \
 	DISCORD_WEBHOOK_URL="$(DISCORD_WEBHOOK_URL)" DISCORD_USERNAME="$(or $(DISCORD_USERNAME),swarm-reconcile)" \
 	./scripts/swarm-reconcile.sh
+
+.PHONY: swarm-onboard-from-compose
+swarm-onboard-from-compose:
+	COMPOSE_FILE="$(COMPOSE_FILE)" STACK_NAME="$(STACK_NAME)" STACK_FILE="$(STACK_FILE)" \
+	ROUTE_SERVICE="$(ROUTE_SERVICE)" SERVICE_PORT="$(SERVICE_PORT)" APP_HOST="$(APP_HOST)" \
+	TRAEFIK_VIP="$(or $(TRAEFIK_VIP),192.168.8.11)" \
+	ENV_FILE="$(or $(ENV_FILE),swarm/env/cluster.env)" ENV_LOCAL_FILE="$(or $(ENV_LOCAL_FILE),swarm/env/cluster.env.local)" \
+	DOMAIN_FILE="$(or $(DOMAIN_FILE),swarm/env/domain.txt)" SOPS_SECRET_FILE="$(or $(SOPS_SECRET_FILE),swarm/secrets/cluster-secrets.sops.yaml)" \
+	DNS_UPSERT="$(or $(DNS_UPSERT),1)" DNS_TTL="$(or $(DNS_TTL),300)" DNS_RESOLVER_IP="$(or $(DNS_RESOLVER_IP),192.168.8.10)" \
+	TECHNITIUM_API_BASE="$(TECHNITIUM_API_BASE)" TECHNITIUM_ZONE="$(TECHNITIUM_ZONE)" \
+	TECHNITIUM_ADMIN_USER="$(or $(TECHNITIUM_ADMIN_USER),admin)" TECHNITIUM_ADMIN_PASSWORD="$(TECHNITIUM_ADMIN_PASSWORD)" \
+	TECHNITIUM_API_TOKEN="$(TECHNITIUM_API_TOKEN)" TECHNITIUM_INSECURE_TLS="$(or $(TECHNITIUM_INSECURE_TLS),1)" \
+	DEPLOY="$(or $(DEPLOY),1)" DRY_RUN="$(or $(DRY_RUN),0)" SYNC_SECRETS="$(or $(SYNC_SECRETS),0)" FORCE_REPLACE="$(or $(FORCE_REPLACE),0)" \
+	MANAGER_HOST="$(or $(MANAGER_HOST),k8s-0)" MANAGER_SSH="$(MANAGER_SSH)" SSH_KEY_FILE="$(SSH_KEY_FILE)" ENSURE_BIND_DIRS="$(or $(ENSURE_BIND_DIRS),1)" ENSURE_BIND_DIRS_SCOPE="$(or $(ENSURE_BIND_DIRS_SCOPE),manager)" \
+	./scripts/swarm-onboard-from-compose.sh
 
 .PHONY: swarm-deploy-apps
 swarm-deploy-apps:

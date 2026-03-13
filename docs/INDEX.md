@@ -9,6 +9,7 @@ Use this page as the starting point for homelab operations.
 - `docs/ARCHITECTURE.md`: cluster and storage architecture notes.
 - `docs/NIXOS-DEPLOY.md`: NixOS bootstrap and deployment flow.
 - `docs/FIRST-TRY-CHECKLIST.md`: pre-flight checklist before first deploy.
+- `docs/STACK-FROM-COMPOSE.md`: create a new stack from compose and deploy via reconcile.
 
 ## Day-2 Operations
 

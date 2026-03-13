@@ -44,11 +44,18 @@ Or run the manual reconcile pipeline for split stacks:
 make swarm-reconcile SSH_KEY_FILE=~/.ssh/homelab-nixos-admin MANAGER_SSH=root@192.168.8.5
 ```
 
+For onboarding a new app from Docker Compose (auto-convert + DNS upsert + reconcile):
+
+```bash
+make swarm-onboard-from-compose COMPOSE_FILE=./jellyfin.yaml
+```
+
 Details: `docs/SWARM-RECONCILE.md`
 Reference docs:
 - `docs/SERVICE-CATALOG.md`
 - `docs/BACKUP-RESTORE.md`
 - `docs/SECRETS-SOPS.md`
+- `docs/STACK-FROM-COMPOSE.md`
 
 ## Domain setup
 
@@ -62,9 +69,10 @@ Put your private base domain on the first non-comment line of `swarm/env/domain.
 
 ## Optional: local DNS (Technitium)
 
-Set `TECHNITIUM_ADMIN_PASSWORD` in `swarm/env/cluster.env.local` (gitignored), then deploy:
+Set `TECHNITIUM_ADMIN_PASSWORD` in `swarm/secrets/cluster-secrets.sops.yaml`, sync secrets, then deploy:
 
 ```bash
+make swarm-sync-secrets
 make swarm-deploy-technitium-dns
 ```
 
