@@ -7,8 +7,9 @@ FLAKE_REF="path:${FLAKE_DIR}"
 
 STACK_FILE="${STACK_FILE:-${REPO_ROOT}/swarm/stacks/homelab.yaml}"
 STACK_NAME="${STACK_NAME:-homelab}"
-  ENV_FILE="${ENV_FILE:-${REPO_ROOT}/swarm/env/cluster.env}"
-  ENV_LOCAL_FILE="${ENV_LOCAL_FILE:-${ENV_FILE}.local}"
+ENV_FILE="${ENV_FILE:-${REPO_ROOT}/swarm/env/cluster.env}"
+ENV_LOCAL_FILE="${ENV_LOCAL_FILE:-${ENV_FILE}.local}"
+DOMAIN_FILE="${DOMAIN_FILE:-${REPO_ROOT}/swarm/env/domain.txt}"
 MANAGER_HOST="${MANAGER_HOST:-k8s-0}"
 MANAGER_SSH="${MANAGER_SSH:-}"
 SSH_KEY_FILE="${SSH_KEY_FILE:-}"
@@ -23,6 +24,7 @@ Env:
   STACK_FILE=./swarm/stacks/homelab.yaml
   STACK_NAME=homelab
   ENV_FILE=./swarm/env/cluster.env
+  DOMAIN_FILE=./swarm/env/domain.txt
   MANAGER_HOST=k8s-0
   MANAGER_SSH=root@192.168.8.5     # overrides MANAGER_HOST lookup
   SSH_KEY_FILE=/path/to/private_key
@@ -36,6 +38,29 @@ require_cmd() {
     echo "Missing required command: ${cmd}" >&2
     exit 1
   }
+}
+
+read_domain_file() {
+  local domain_file="$1"
+  awk 'NF && $1 !~ /^#/ {print $1; exit}' "${domain_file}" | tr -d '\r'
+}
+
+load_domain() {
+  local domain_from_file=""
+
+  if [[ -f "${DOMAIN_FILE}" ]]; then
+    domain_from_file="$(read_domain_file "${DOMAIN_FILE}")"
+    if [[ -z "${domain_from_file}" ]]; then
+      echo "DOMAIN_FILE is empty: ${DOMAIN_FILE}" >&2
+      exit 1
+    fi
+    export BASE_DOMAIN="${domain_from_file}"
+  fi
+
+  if [[ -z "${BASE_DOMAIN:-}" ]]; then
+    echo "BASE_DOMAIN is not set. Set DOMAIN_FILE (${DOMAIN_FILE}) or BASE_DOMAIN in env." >&2
+    exit 1
+  fi
 }
 
 ssh_cmd() {
@@ -99,8 +124,9 @@ main() {
     # shellcheck disable=SC1090
     source "${ENV_LOCAL_FILE}"
   fi
-  export STACK_NAME
   set +a
+  load_domain
+  export STACK_NAME
 
   local target
   target="$(resolve_target)"

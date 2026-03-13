@@ -22,6 +22,7 @@ docs/NODE-DISK-INVENTORY.md
 nixos/hosts.nix.bak.*
 swarm/env/cluster.env
 swarm/env/*.local
+swarm/env/domain.txt
 swarm/secrets/cluster-secrets.sops.yaml
 swarm/secrets/*.sops.yaml
 !swarm/secrets/*.sops.yaml.example

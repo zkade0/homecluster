@@ -162,9 +162,18 @@ nixos-restore-key:
 validate-stack:
 	@command -v docker >/dev/null || (echo "docker is not installed" && exit 1)
 	@ENV_FILE="$(or $(ENV_FILE),swarm/env/cluster.env)" ; \
+	ENV_LOCAL_FILE="$(or $(ENV_LOCAL_FILE),swarm/env/cluster.env.local)" ; \
+	DOMAIN_FILE="$(or $(DOMAIN_FILE),swarm/env/domain.txt)" ; \
 	STACK_NAME="$(or $(STACK_NAME),homelab)" ; \
 	test -f "$$ENV_FILE" || (echo "missing $$ENV_FILE" && exit 1) ; \
-	set -a ; . "$$ENV_FILE" ; export STACK_NAME ; set +a ; \
+	set -a ; . "$$ENV_FILE" ; if [ -f "$$ENV_LOCAL_FILE" ]; then . "$$ENV_LOCAL_FILE" ; fi ; set +a ; \
+	if [ -f "$$DOMAIN_FILE" ]; then \
+		BASE_DOMAIN="$$(awk 'NF && $$1 !~ /^#/ {print $$1; exit}' "$$DOMAIN_FILE" | tr -d '\r')" ; \
+		test -n "$$BASE_DOMAIN" || (echo "DOMAIN_FILE is empty: $$DOMAIN_FILE" && exit 1) ; \
+		export BASE_DOMAIN ; \
+	fi ; \
+	test -n "$${BASE_DOMAIN:-}" || (echo "BASE_DOMAIN is not set (set DOMAIN_FILE or BASE_DOMAIN in ENV_FILE)" && exit 1) ; \
+	export STACK_NAME ; \
 	envsubst < swarm/stacks/homelab.yaml >/tmp/homelab-stack.rendered.yaml ; \
 	docker compose -f /tmp/homelab-stack.rendered.yaml config >/dev/null ; \
 	echo "Stack render is valid."

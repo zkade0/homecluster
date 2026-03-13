@@ -14,7 +14,7 @@ It runs from your local repo/workstation and deploys remotely to the Swarm manag
 
 `scripts/swarm-reconcile.sh` performs these steps:
 
-1. Load env vars from `swarm/env/cluster.env` and optional `swarm/env/cluster.env.local`.
+1. Load env vars from local `swarm/env/cluster.env` and optional `swarm/env/cluster.env.local`, then load `BASE_DOMAIN` from `swarm/env/domain.txt` when present.
 2. Optionally sync SOPS secrets to Swarm (`scripts/swarm-sync-secrets.sh`).
 3. Discover stack files in `swarm/stacks/` (or use selected stacks only).
 4. Render each stack with `envsubst`.
@@ -103,6 +103,7 @@ make swarm-reconcile DRY_RUN=1 SYNC_SECRETS=0 STACKS=monitoring
 - `EXCLUDE_STACKS`: comma-separated names excluded from auto-discovery.
 - `ENV_FILE`: default `swarm/env/cluster.env`.
 - `ENV_LOCAL_FILE`: default `swarm/env/cluster.env.local`.
+- `DOMAIN_FILE`: default `swarm/env/domain.txt` (first non-comment line becomes `BASE_DOMAIN`).
 - `SYNC_SECRETS`: `1` or `0`.
 - `FORCE_REPLACE`: passed to secret sync script.
 - `DEPLOY_TIMEOUT`: per-stack health timeout seconds (default `180`).

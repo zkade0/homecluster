@@ -12,6 +12,7 @@ EXCLUDE_STACKS="${EXCLUDE_STACKS:-homelab}"
 
 ENV_FILE="${ENV_FILE:-${REPO_ROOT}/swarm/env/cluster.env}"
 ENV_LOCAL_FILE="${ENV_LOCAL_FILE:-${ENV_FILE}.local}"
+DOMAIN_FILE="${DOMAIN_FILE:-${REPO_ROOT}/swarm/env/domain.txt}"
 SOPS_SECRET_FILE="${SOPS_SECRET_FILE:-${REPO_ROOT}/swarm/secrets/cluster-secrets.sops.yaml}"
 
 MANAGER_HOST="${MANAGER_HOST:-k8s-0}"
@@ -51,6 +52,7 @@ Env:
 
   ENV_FILE=./swarm/env/cluster.env
   ENV_LOCAL_FILE=./swarm/env/cluster.env.local
+  DOMAIN_FILE=./swarm/env/domain.txt
   SOPS_SECRET_FILE=./swarm/secrets/cluster-secrets.sops.yaml
 
   MANAGER_HOST=k8s-0
@@ -143,6 +145,11 @@ normalize_path() {
   fi
 
   printf '%s\n' "${REPO_ROOT}/${path}"
+}
+
+read_domain_file() {
+  local domain_file="$1"
+  awk 'NF && $1 !~ /^#/ {print $1; exit}' "${domain_file}" | tr -d '\r'
 }
 
 contains_csv_value() {
@@ -286,6 +293,21 @@ load_env() {
     source "${ENV_LOCAL_FILE}"
   fi
   set +a
+
+  local domain_from_file=""
+  if [[ -f "${DOMAIN_FILE}" ]]; then
+    domain_from_file="$(read_domain_file "${DOMAIN_FILE}")"
+    if [[ -z "${domain_from_file}" ]]; then
+      err "DOMAIN_FILE is empty: ${DOMAIN_FILE}"
+      return 1
+    fi
+    export BASE_DOMAIN="${domain_from_file}"
+  fi
+
+  if [[ -z "${BASE_DOMAIN:-}" ]]; then
+    err "BASE_DOMAIN is not set. Set DOMAIN_FILE (${DOMAIN_FILE}) or BASE_DOMAIN in env."
+    return 1
+  fi
 }
 
 send_discord_notification() {
@@ -512,6 +534,7 @@ main() {
   STACKS_DIR="$(normalize_path "${STACKS_DIR}")"
   ENV_FILE="$(normalize_path "${ENV_FILE}")"
   ENV_LOCAL_FILE="$(normalize_path "${ENV_LOCAL_FILE}")"
+  DOMAIN_FILE="$(normalize_path "${DOMAIN_FILE}")"
   SOPS_SECRET_FILE="$(normalize_path "${SOPS_SECRET_FILE}")"
   STATE_DIR="$(normalize_path "${STATE_DIR}")"
   RENDER_DIR="${STATE_DIR}/rendered"

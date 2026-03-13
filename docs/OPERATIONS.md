@@ -17,8 +17,10 @@ ssh root@192.168.8.5 'docker service logs --tail 100 homelab_traefik'
 
 ## Update stack env
 
-1. Edit `swarm/env/cluster.env`.
-2. Redeploy:
+1. Edit `swarm/env/cluster.env` for non-sensitive defaults.
+2. Set private base domain in `swarm/env/domain.txt` (gitignored).
+3. Put other private overrides in `swarm/env/cluster.env.local` (gitignored).
+4. Redeploy:
 
 ```bash
 make swarm-deploy
@@ -83,7 +85,7 @@ make swarm-reconcile DRY_RUN=1
 
 Behavior:
 - Discovers stack files under `swarm/stacks/` (or uses `STACKS`/`STACK_FILE`)
-- Renders env vars from `swarm/env/cluster.env` (+ optional `.local`)
+- Renders env vars from `swarm/env/cluster.env` (+ optional `.local`) and `swarm/env/domain.txt`
 - Syncs SOPS secrets first (unless `SYNC_SECRETS=0`)
 - Deploys each stack and waits for replica convergence
 - Rolls back failed stack to `dist/swarm-reconcile/last-good/<stack>.yaml`

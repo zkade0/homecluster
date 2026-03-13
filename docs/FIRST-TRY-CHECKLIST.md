@@ -16,7 +16,11 @@ Fill these before first Swarm bootstrap to maximize success.
 ## Required local edits
 
 - `swarm/env/cluster.env`
-  - set `BASE_DOMAIN` and `TIMEZONE`
+  - create from `swarm/env/cluster.env.example`; set non-sensitive defaults (for example `TIMEZONE`)
+- `swarm/env/domain.txt` (gitignored)
+  - create from `swarm/env/domain.txt.example`; set private base domain on the first non-comment line
+- `swarm/env/cluster.env.local` (gitignored)
+  - optional private overrides (non-domain values)
 - `swarm/secrets/cluster-secrets.sops.yaml`
   - set encrypted values used by Swarm secrets (`ACME_EMAIL`, `CLOUDFLARE_API_TOKEN`, `VAULTWARDEN_ADMIN_TOKEN`, etc.)
 - `.sops.yaml`

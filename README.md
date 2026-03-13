@@ -61,7 +61,7 @@ make nixos-restore-key
 ## Swarm reconcile pipeline (manual)
 
 Use this when you want one command to reconcile one/many stack files from `swarm/stacks/` with:
-- env rendering (`cluster.env` + optional `.local`)
+- env rendering (`cluster.env` + optional `.local` + `domain.txt`)
 - optional SOPS secret sync
 - deploy + health check
 - rollback to last-known-good on failure

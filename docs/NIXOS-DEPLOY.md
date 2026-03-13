@@ -65,11 +65,24 @@ This initializes the bootstrap manager and joins the other nodes based on `nixos
 
 ## 4) Configure stack variables
 
-Edit `swarm/env/cluster.env`:
+Create local env files from template:
+
+```bash
+cp swarm/env/cluster.env.example swarm/env/cluster.env
+cp swarm/env/cluster.env.example swarm/env/cluster.env.local
+cp swarm/env/domain.txt.example swarm/env/domain.txt
+```
+
+Set baseline values in `swarm/env/cluster.env`:
 
 ```env
 TIMEZONE=America/Denver
-BASE_DOMAIN=example.com
+```
+
+Set your private domain in `swarm/env/domain.txt` (gitignored):
+
+```txt
+your-private-domain.tld
 ```
 
 ## 5) Sync secrets + deploy stack

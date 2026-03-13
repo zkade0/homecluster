@@ -4,7 +4,11 @@ This directory is the active Layer 2 deployment path for homelab services.
 
 ## Files
 
-- `env/cluster.env`: non-secret stack variables (`BASE_DOMAIN`, `TIMEZONE`, Grafana admin defaults)
+- `env/cluster.env.example`: tracked env template
+- `env/cluster.env`: local env file (gitignored)
+- `env/cluster.env.local`: local override env file (gitignored)
+- `env/domain.txt.example`: tracked domain template
+- `env/domain.txt`: local base domain file (gitignored)
 - `secrets/cluster-secrets.sops.yaml`: encrypted secret source for Swarm
 - `stacks/homelab.yaml`: main Swarm stack
 - `stacks/monitoring.yaml`: Prometheus + Grafana stack for split-stack deployments
@@ -39,6 +43,16 @@ make swarm-reconcile SSH_KEY_FILE=~/.ssh/homelab-nixos-admin MANAGER_SSH=root@19
 ```
 
 Details: `docs/SWARM-RECONCILE.md`
+
+## Domain setup
+
+Create your local domain file:
+
+```bash
+cp swarm/env/domain.txt.example swarm/env/domain.txt
+```
+
+Put your private base domain on the first non-comment line of `swarm/env/domain.txt`.
 
 ## Optional: local DNS (Technitium)
 
