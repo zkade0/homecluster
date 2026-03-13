@@ -1,9 +1,17 @@
 # SOPS age keys and secrets
 .agekey
 age.agekey
+*.agekey
+*.pem
+*.p12
+*.pfx
+id_rsa
+id_ed25519
 
 # Tooling
 .env
+.env.*
+!.env.example
 *.log
 .DS_Store
 .direnv/
@@ -12,7 +20,13 @@ result
 result-*
 docs/NODE-DISK-INVENTORY.md
 nixos/hosts.nix.bak.*
+swarm/env/cluster.env
 swarm/env/*.local
+swarm/secrets/cluster-secrets.sops.yaml
+swarm/secrets/*.sops.yaml
+!swarm/secrets/*.sops.yaml.example
+secrets/**/*.sops.yaml
+!secrets/**/*.sops.yaml.example
 
 # Editor
 .vscode/
