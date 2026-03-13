@@ -1,5 +1,12 @@
 # Build And Deploy A New Swarm Stack From Compose
 
+## Navigation
+
+- [Repository Home](../README.md) | [[README]]
+- [Documentation Index](INDEX.md) | [[docs/INDEX]]
+- [Swarm Layout](../swarm/README.md) | [[swarm/README]]
+- [Swarm Reconcile](SWARM-RECONCILE.md) | [[docs/SWARM-RECONCILE]]
+
 Use this runbook to onboard a new app from Docker Compose into this repo's Swarm workflow.
 
 ## Naming Convention (Required)
@@ -137,3 +144,9 @@ If needed, you can still do manual conversion and deployment:
 make swarm-reconcile STACK_FILE=swarm/stacks/<stack-name>.yaml DRY_RUN=1
 make swarm-reconcile STACK_FILE=swarm/stacks/<stack-name>.yaml
 ```
+
+## Related
+
+- [Service Catalog](SERVICE-CATALOG.md) | [[docs/SERVICE-CATALOG]]
+- [Secrets And SOPS](SECRETS-SOPS.md) | [[docs/SECRETS-SOPS]]
+- [Operations Notes](OPERATIONS.md) | [[docs/OPERATIONS]]

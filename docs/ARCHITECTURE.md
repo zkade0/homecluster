@@ -1,5 +1,12 @@
 # Architecture
 
+## Navigation
+
+- [Repository Home](../README.md) | [[README]]
+- [Documentation Index](INDEX.md) | [[docs/INDEX]]
+- [NixOS Deploy](NIXOS-DEPLOY.md) | [[docs/NIXOS-DEPLOY]]
+- [Swarm Layout](../swarm/README.md) | [[swarm/README]]
+
 ## Node topology
 
 - 3 nodes total
@@ -35,3 +42,9 @@
 
 - Service data uses Docker named volumes.
 - Stateful services are pinned to bootstrap node (`k8s-0`) unless you add shared storage.
+
+## Related
+
+- [Service Catalog](SERVICE-CATALOG.md) | [[docs/SERVICE-CATALOG]]
+- [Operations Notes](OPERATIONS.md) | [[docs/OPERATIONS]]
+- [First-Try Checklist](FIRST-TRY-CHECKLIST.md) | [[docs/FIRST-TRY-CHECKLIST]]

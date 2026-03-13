@@ -1,5 +1,12 @@
 # Docker Swarm Layout
 
+## Navigation
+
+- [Repository Home](../README.md) | [[README]]
+- [Documentation Index](../docs/INDEX.md) | [[docs/INDEX]]
+- [Swarm Reconcile](../docs/SWARM-RECONCILE.md) | [[docs/SWARM-RECONCILE]]
+- [Compose Onboarding](../docs/STACK-FROM-COMPOSE.md) | [[docs/STACK-FROM-COMPOSE]]
+
 This directory is the active Layer 2 deployment path for homelab services.
 
 ## Files
@@ -124,3 +131,9 @@ Behavior:
 - Traefik only exposes services explicitly labeled with `traefik.enable=true`.
 - TLS is enforced on all published app routes.
 - Stateful services are pinned to the bootstrap node to avoid accidental data split across local volumes.
+
+## Related
+
+- [Service Catalog](../docs/SERVICE-CATALOG.md) | [[docs/SERVICE-CATALOG]]
+- [Operations Notes](../docs/OPERATIONS.md) | [[docs/OPERATIONS]]
+- [Secrets And SOPS](../docs/SECRETS-SOPS.md) | [[docs/SECRETS-SOPS]]

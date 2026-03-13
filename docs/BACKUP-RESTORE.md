@@ -1,5 +1,12 @@
 # Backup And Restore
 
+## Navigation
+
+- [Repository Home](../README.md) | [[README]]
+- [Documentation Index](INDEX.md) | [[docs/INDEX]]
+- [Operations Notes](OPERATIONS.md) | [[docs/OPERATIONS]]
+- [Secrets And SOPS](SECRETS-SOPS.md) | [[docs/SECRETS-SOPS]]
+
 This repo uses restic to back up shared app data from Gluster-backed paths to an external NFS target.
 
 ## Backup Model
@@ -87,3 +94,9 @@ restic restore <snapshot-id> --target /tmp/restore-test
 - The 2 TiB cap is enforced in the backup loop after retention runs.
 - This cap is practical policy-level pruning, not a hard filesystem quota.
 - For a strict hard stop, also enforce quota on the NFS backend.
+
+## Related
+
+- [Swarm Reconcile](SWARM-RECONCILE.md) | [[docs/SWARM-RECONCILE]]
+- [Service Catalog](SERVICE-CATALOG.md) | [[docs/SERVICE-CATALOG]]
+- [Stack From Compose](STACK-FROM-COMPOSE.md) | [[docs/STACK-FROM-COMPOSE]]

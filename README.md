@@ -1,5 +1,12 @@
 # homecluster: NixOS + Docker Swarm Homelab
 
+## Navigation
+
+- [Repository Home](README.md) | [[README]]
+- [Documentation Index](docs/INDEX.md) | [[docs/INDEX]]
+- [Swarm Layout](swarm/README.md) | [[swarm/README]]
+- [NixOS Fleet](nixos/README.md) | [[nixos/README]]
+
 This repo now uses a NixOS-first provisioning workflow and Docker Swarm for service orchestration.
 
 ## Provisioning options
@@ -92,3 +99,9 @@ make swarm-reconcile STACK_FILE=swarm/stacks/romm.yaml SSH_KEY_FILE=~/.ssh/homel
 ```
 
 Full guide: `docs/SWARM-RECONCILE.md`
+
+## Related
+
+- [First-Try Checklist](docs/FIRST-TRY-CHECKLIST.md) | [[docs/FIRST-TRY-CHECKLIST]]
+- [NixOS Deploy Guide](docs/NIXOS-DEPLOY.md) | [[docs/NIXOS-DEPLOY]]
+- [Swarm Reconcile](docs/SWARM-RECONCILE.md) | [[docs/SWARM-RECONCILE]]

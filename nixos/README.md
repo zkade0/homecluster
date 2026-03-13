@@ -1,5 +1,12 @@
 # NixOS Fleet (nixos-rebuild)
 
+## Navigation
+
+- [Repository Home](../README.md) | [[README]]
+- [Documentation Index](../docs/INDEX.md) | [[docs/INDEX]]
+- [NixOS Deploy Guide](../docs/NIXOS-DEPLOY.md) | [[docs/NIXOS-DEPLOY]]
+- [Swarm Layout](../swarm/README.md) | [[swarm/README]]
+
 This folder manages homelab nodes with NixOS and plain `nixos-rebuild` deployment.
 
 ## Layout
@@ -38,3 +45,9 @@ make nixos-restore-key
 ```
 
 Detailed runbook: `../docs/NIXOS-DEPLOY.md`.
+
+## Related
+
+- [First-Try Checklist](../docs/FIRST-TRY-CHECKLIST.md) | [[docs/FIRST-TRY-CHECKLIST]]
+- [Architecture](../docs/ARCHITECTURE.md) | [[docs/ARCHITECTURE]]
+- [Managed SSH Keys](keys/README.md) | [[nixos/keys/README]]

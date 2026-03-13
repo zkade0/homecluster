@@ -1,5 +1,12 @@
 # Service Catalog
 
+## Navigation
+
+- [Repository Home](../README.md) | [[README]]
+- [Documentation Index](INDEX.md) | [[docs/INDEX]]
+- [Swarm Layout](../swarm/README.md) | [[swarm/README]]
+- [Operations Notes](OPERATIONS.md) | [[docs/OPERATIONS]]
+
 This catalog maps user-facing endpoints to stack files.
 All hostnames use `${BASE_DOMAIN}` placeholders by design.
 
@@ -41,3 +48,9 @@ ssh root@<manager-ip> 'docker service inspect <stack>_<service> --format "{{json
 # Validate DNS resolution from a client
 nslookup <host>.${BASE_DOMAIN} <dns-server-ip>
 ```
+
+## Related
+
+- [Swarm Reconcile](SWARM-RECONCILE.md) | [[docs/SWARM-RECONCILE]]
+- [Backup And Restore](BACKUP-RESTORE.md) | [[docs/BACKUP-RESTORE]]
+- [Stack From Compose](STACK-FROM-COMPOSE.md) | [[docs/STACK-FROM-COMPOSE]]

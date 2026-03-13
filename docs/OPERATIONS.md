@@ -1,11 +1,18 @@
 # Operations Notes
 
+## Navigation
+
+- [Repository Home](../README.md) | [[README]]
+- [Documentation Index](INDEX.md) | [[docs/INDEX]]
+- [Swarm Reconcile](SWARM-RECONCILE.md) | [[docs/SWARM-RECONCILE]]
+- [Service Catalog](SERVICE-CATALOG.md) | [[docs/SERVICE-CATALOG]]
+
 ## Related Runbooks
 
-- `docs/INDEX.md`
-- `docs/SERVICE-CATALOG.md`
-- `docs/BACKUP-RESTORE.md`
-- `docs/SECRETS-SOPS.md`
+- [Documentation Index](INDEX.md) | [[docs/INDEX]]
+- [Service Catalog](SERVICE-CATALOG.md) | [[docs/SERVICE-CATALOG]]
+- [Backup And Restore](BACKUP-RESTORE.md) | [[docs/BACKUP-RESTORE]]
+- [Secrets And SOPS](SECRETS-SOPS.md) | [[docs/SECRETS-SOPS]]
 
 ## Useful commands
 
@@ -50,7 +57,7 @@ make swarm-deploy-romm
 
 1. Edit `swarm/env/cluster.env` for non-sensitive defaults.
 2. Set private base domain in `swarm/env/domain.txt` (gitignored).
-3. Put other private overrides in `swarm/env/cluster.env.local` (gitignored).
+3. Keep secrets in `swarm/secrets/cluster-secrets.sops.yaml`; use `cluster.env.local` only for non-secret local overrides.
 4. Redeploy:
 
 ```bash
@@ -63,7 +70,8 @@ make swarm-deploy
 - URL: `http://grafana.${BASE_DOMAIN}` (for example `http://grafana.example.com`)
 - Default datasource: Prometheus (auto-provisioned)
 - Home dashboard: `Swarm Overview` (auto-provisioned)
-- Login defaults come from `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` in `swarm/env/cluster.env`
+- Login user comes from `GRAFANA_ADMIN_USER` in `swarm/env/cluster.env`
+- Login password comes from `GRAFANA_ADMIN_PASSWORD` in `swarm/secrets/cluster-secrets.sops.yaml`
 
 Deploy or refresh monitoring after env changes:
 
@@ -123,3 +131,9 @@ Behavior:
 - Sends Discord notification if `DISCORD_WEBHOOK_URL` is set
 
 Detailed reference: `docs/SWARM-RECONCILE.md`
+
+## Related
+
+- [Stack From Compose](STACK-FROM-COMPOSE.md) | [[docs/STACK-FROM-COMPOSE]]
+- [Swarm Layout](../swarm/README.md) | [[swarm/README]]
+- [Architecture](ARCHITECTURE.md) | [[docs/ARCHITECTURE]]

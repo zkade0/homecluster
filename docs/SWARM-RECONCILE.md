@@ -1,5 +1,12 @@
 # Swarm Reconcile Pipeline
 
+## Navigation
+
+- [Repository Home](../README.md) | [[README]]
+- [Documentation Index](INDEX.md) | [[docs/INDEX]]
+- [Swarm Layout](../swarm/README.md) | [[swarm/README]]
+- [Operations Notes](OPERATIONS.md) | [[docs/OPERATIONS]]
+
 This document explains the manual GitOps-like pipeline for Docker Swarm in this repo.
 
 The entrypoint is:
@@ -143,3 +150,9 @@ If a stack keeps rolling back:
   `ssh root@192.168.8.5 "docker service ps <stack>_<service> --no-trunc"`
 - Inspect logs:
   `ssh root@192.168.8.5 "docker service logs --tail 200 <stack>_<service>"`
+
+## Related
+
+- [Stack From Compose](STACK-FROM-COMPOSE.md) | [[docs/STACK-FROM-COMPOSE]]
+- [Secrets And SOPS](SECRETS-SOPS.md) | [[docs/SECRETS-SOPS]]
+- [Backup And Restore](BACKUP-RESTORE.md) | [[docs/BACKUP-RESTORE]]

@@ -1,5 +1,12 @@
 # NixOS + Docker Swarm Bootstrap Guide
 
+## Navigation
+
+- [Repository Home](../README.md) | [[README]]
+- [Documentation Index](INDEX.md) | [[docs/INDEX]]
+- [NixOS Fleet](../nixos/README.md) | [[nixos/README]]
+- [Swarm Layout](../swarm/README.md) | [[swarm/README]]
+
 This guide uses NixOS for host state and Docker Swarm for service orchestration.
 
 ## Layer model
@@ -115,3 +122,9 @@ This restores:
 ## Notes
 
 - Stateful services are pinned to the bootstrap node by label (`homelab.tag.bootstrap=true`) to avoid split local volumes.
+
+## Related
+
+- [First-Try Checklist](FIRST-TRY-CHECKLIST.md) | [[docs/FIRST-TRY-CHECKLIST]]
+- [Swarm Reconcile](SWARM-RECONCILE.md) | [[docs/SWARM-RECONCILE]]
+- [Architecture](ARCHITECTURE.md) | [[docs/ARCHITECTURE]]
