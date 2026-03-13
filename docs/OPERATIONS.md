@@ -94,6 +94,17 @@ FORCE_REPLACE=1 make swarm-sync-secrets
 make swarm-deploy
 ```
 
+## Secret leak prevention
+
+- Do not put secret literals directly in compose/stack `environment:` values.
+- Store secrets in `swarm/secrets/cluster-secrets.sops.yaml` and sync to Swarm secrets.
+- For compose onboarding DNS automation, use `TECHNITIUM_API_TOKEN` (token-only mode), not admin password login.
+- Run preflight checks without side effects:
+
+```bash
+make swarm-onboard-from-compose COMPOSE_FILE=./myapp.yaml PREFLIGHT_ONLY=1
+```
+
 ## Add a new app
 
 1. Add service definition in `swarm/stacks/homelab.yaml`.

@@ -35,6 +35,7 @@ Store these in `swarm/secrets/cluster-secrets.sops.yaml`:
 
 - `GRAFANA_ADMIN_PASSWORD`
 - `TECHNITIUM_ADMIN_PASSWORD` (local DNS stack)
+- `TECHNITIUM_API_TOKEN` (compose onboarding DNS automation)
 - `PAPERLESS_SECRET_KEY` (Paperless stack)
 - `RESTIC_PASSWORD` (backups stack)
 

@@ -33,6 +33,7 @@ Default behavior of this workflow:
 - Adds persistent storage binds under `/mnt/homelab-data/<stack>/...`.
 - Ensures stack hostname uses `<stack-name>.${BASE_DOMAIN}`.
 - Upserts Technitium DNS `A` record to Traefik VIP `192.168.8.11`.
+- Runs strict preflight checks to block leaked inline secrets before deploy.
 - Validates rendered stack with `docker compose config`.
 - Deploys with `make swarm-reconcile` (unless `DEPLOY=0`).
 
@@ -53,7 +54,14 @@ make swarm-onboard-from-compose \
 - `swarm/env/cluster.env` exists.
 - Optional overrides in `swarm/env/cluster.env.local`.
 - `swarm/env/domain.txt` contains `${BASE_DOMAIN}`.
-- For DNS automation, Technitium API must be reachable (default `https://dns.admin.${BASE_DOMAIN}`).
+- For DNS automation, Technitium API must be reachable (default `http://dns.admin.${BASE_DOMAIN}`).
+- DNS automation is token-only; provide `TECHNITIUM_API_TOKEN` from SOPS (`TECHNITIUM_API_TOKEN` key).
+
+## Secret Safety Rules
+
+- Do not keep secrets inline in `environment:` values in compose or stack YAML.
+- Use Swarm secrets (`secrets:` + `/run/secrets/...` or `*_FILE`) for secret-bearing app config.
+- Onboarding preflight blocks deploy when inline secret literals are detected.
 
 ## DNS Policy (VIP Only)
 
@@ -104,6 +112,12 @@ Dry run only:
 
 ```bash
 make swarm-onboard-from-compose COMPOSE_FILE=./jellyfin.yaml DRY_RUN=1 DEPLOY=0
+```
+
+Preflight only (no DNS, no deploy side effects):
+
+```bash
+make swarm-onboard-from-compose COMPOSE_FILE=./jellyfin.yaml PREFLIGHT_ONLY=1
 ```
 
 Direct deploy (secondary path):

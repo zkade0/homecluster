@@ -97,6 +97,36 @@ create_or_replace_secret() {
   printf "%s" "${value}" | ssh_cmd "${target}" "docker secret create '${name}' - >/dev/null"
 }
 
+sync_required_secret() {
+  local target="$1"
+  local key="$2"
+  local name="$3"
+  local value
+
+  value="$(extract_secret "${key}")"
+  if [[ -z "${value}" ]]; then
+    echo "Required secret ${key} is empty in ${SOPS_SECRET_FILE}" >&2
+    exit 1
+  fi
+
+  create_or_replace_secret "${target}" "${name}" "${value}"
+}
+
+sync_optional_secret() {
+  local target="$1"
+  local key="$2"
+  local name="$3"
+  local value
+
+  value="$(extract_secret_optional "${key}")"
+  if [[ -z "${value}" ]]; then
+    echo "Secret ${key} not found in ${SOPS_SECRET_FILE}, skipping ${name}."
+    return 0
+  fi
+
+  create_or_replace_secret "${target}" "${name}" "${value}"
+}
+
 main() {
   if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     usage
@@ -116,24 +146,27 @@ main() {
   target="$(resolve_target)"
   echo "Syncing Docker Swarm secrets to ${target}"
 
-  create_or_replace_secret "${target}" "homelab_acme_email" "$(extract_secret "ACME_EMAIL")"
-  create_or_replace_secret "${target}" "homelab_cloudflare_api_token" "$(extract_secret "CLOUDFLARE_API_TOKEN")"
-  create_or_replace_secret "${target}" "homelab_vaultwarden_admin_token" "$(extract_secret "VAULTWARDEN_ADMIN_TOKEN")"
-  create_or_replace_secret "${target}" "homelab_pihole_web_password" "$(extract_secret "PIHOLE_WEB_PASSWORD")"
-  create_or_replace_secret "${target}" "homelab_authentik_secret_key" "$(extract_secret "AUTHENTIK_SECRET_KEY")"
-  create_or_replace_secret "${target}" "homelab_authentik_bootstrap_password" "$(extract_secret "AUTHENTIK_BOOTSTRAP_PASSWORD")"
-  create_or_replace_secret "${target}" "homelab_authentik_bootstrap_token" "$(extract_secret "AUTHENTIK_BOOTSTRAP_TOKEN")"
-  create_or_replace_secret "${target}" "homelab_authentik_postgres_password" "$(extract_secret "AUTHENTIK_POSTGRES_PASSWORD")"
-  create_or_replace_secret "${target}" "homelab_romm_db_password" "$(extract_secret "ROMM_DB_PASSWORD")"
+  sync_required_secret "${target}" "ACME_EMAIL" "homelab_acme_email"
+  sync_required_secret "${target}" "CLOUDFLARE_API_TOKEN" "homelab_cloudflare_api_token"
+  sync_required_secret "${target}" "VAULTWARDEN_ADMIN_TOKEN" "homelab_vaultwarden_admin_token"
+  sync_required_secret "${target}" "GRAFANA_ADMIN_PASSWORD" "homelab_grafana_admin_password"
+  sync_required_secret "${target}" "PIHOLE_WEB_PASSWORD" "homelab_pihole_web_password"
+  sync_required_secret "${target}" "AUTHENTIK_SECRET_KEY" "homelab_authentik_secret_key"
+  sync_required_secret "${target}" "AUTHENTIK_BOOTSTRAP_PASSWORD" "homelab_authentik_bootstrap_password"
+  sync_required_secret "${target}" "AUTHENTIK_BOOTSTRAP_TOKEN" "homelab_authentik_bootstrap_token"
+  sync_required_secret "${target}" "AUTHENTIK_POSTGRES_PASSWORD" "homelab_authentik_postgres_password"
+  sync_required_secret "${target}" "ROMM_DB_PASSWORD" "homelab_romm_db_password"
 
-  local restic_password
-  restic_password="$(extract_secret_optional "RESTIC_PASSWORD")"
-
-  if [[ -n "${restic_password}" ]]; then
-    create_or_replace_secret "${target}" "homelab_restic_password" "${restic_password}"
-  else
-    echo "Secret RESTIC_PASSWORD not found in ${SOPS_SECRET_FILE}, skipping homelab_restic_password."
-  fi
+  sync_optional_secret "${target}" "RESTIC_PASSWORD" "homelab_restic_password"
+  sync_optional_secret "${target}" "TECHNITIUM_ADMIN_PASSWORD" "homelab_technitium_admin_password"
+  sync_optional_secret "${target}" "TECHNITIUM_API_TOKEN" "homelab_technitium_api_token"
+  sync_optional_secret "${target}" "PAPERLESS_SECRET_KEY" "homelab_paperless_secret_key"
+  sync_optional_secret "${target}" "ROMM_DB_ROOT_PASSWORD" "homelab_romm_db_root_password"
+  sync_optional_secret "${target}" "ROMM_AUTH_SECRET_KEY" "homelab_romm_auth_secret_key"
+  sync_optional_secret "${target}" "SCREENSCRAPER_USER" "homelab_romm_screenscraper_user"
+  sync_optional_secret "${target}" "SCREENSCRAPER_PASSWORD" "homelab_romm_screenscraper_password"
+  sync_optional_secret "${target}" "RETROACHIEVEMENTS_API_KEY" "homelab_romm_retroachievements_api_key"
+  sync_optional_secret "${target}" "STEAMGRIDDB_API_KEY" "homelab_romm_steamgriddb_api_key"
 
   echo "Secret sync complete."
 }

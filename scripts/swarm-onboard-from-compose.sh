@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -23,14 +24,15 @@ DNS_TTL="${DNS_TTL:-300}"
 DNS_RESOLVER_IP="${DNS_RESOLVER_IP:-192.168.8.10}"
 TECHNITIUM_API_BASE="${TECHNITIUM_API_BASE:-}"
 TECHNITIUM_ZONE="${TECHNITIUM_ZONE:-}"
-TECHNITIUM_ADMIN_USER="${TECHNITIUM_ADMIN_USER:-admin}"
-TECHNITIUM_ADMIN_PASSWORD="${TECHNITIUM_ADMIN_PASSWORD:-}"
 TECHNITIUM_API_TOKEN="${TECHNITIUM_API_TOKEN:-}"
+TECHNITIUM_API_TOKEN_FILE="${TECHNITIUM_API_TOKEN_FILE:-}"
 TECHNITIUM_INSECURE_TLS="${TECHNITIUM_INSECURE_TLS:-1}"
-TECHNITIUM_LOGIN_BASE=""
 
 DEPLOY="${DEPLOY:-1}"
 DRY_RUN="${DRY_RUN:-0}"
+PREFLIGHT="${PREFLIGHT:-1}"
+PREFLIGHT_STRICT="${PREFLIGHT_STRICT:-1}"
+PREFLIGHT_ONLY="${PREFLIGHT_ONLY:-0}"
 SYNC_SECRETS="${SYNC_SECRETS:-0}"
 FORCE_REPLACE="${FORCE_REPLACE:-0}"
 MANAGER_HOST="${MANAGER_HOST:-k8s-0}"
@@ -64,13 +66,15 @@ Env:
   DNS_RESOLVER_IP=192.168.8.10
   TECHNITIUM_API_BASE=http://dns.admin.\${BASE_DOMAIN}
   TECHNITIUM_ZONE=\${BASE_DOMAIN}
-  TECHNITIUM_ADMIN_USER=admin
-  TECHNITIUM_ADMIN_PASSWORD=<optional>
-  TECHNITIUM_API_TOKEN=<optional>
+  TECHNITIUM_API_TOKEN=<optional; prefer SOPS>
+  TECHNITIUM_API_TOKEN_FILE=<optional file path override>
   TECHNITIUM_INSECURE_TLS=1
 
   DEPLOY=1
   DRY_RUN=0
+  PREFLIGHT=1
+  PREFLIGHT_STRICT=1
+  PREFLIGHT_ONLY=0
   SYNC_SECRETS=0
   FORCE_REPLACE=0
   MANAGER_HOST=k8s-0
@@ -82,11 +86,28 @@ USAGE
 }
 
 log() {
-  printf '[%s] %s\n' "$(date '+%F %T')" "$*"
+  printf '[%s] %s\n' "$(date '+%F %T')" "$(sanitize_message "$*")"
 }
 
 err() {
-  printf '[%s] ERROR: %s\n' "$(date '+%F %T')" "$*" >&2
+  printf '[%s] ERROR: %s\n' "$(date '+%F %T')" "$(sanitize_message "$*")" >&2
+}
+
+sanitize_message() {
+  local msg="$1"
+  local value
+  for value in "${TECHNITIUM_API_TOKEN:-}" "${TECHNITIUM_API_TOKEN_FILE:-}"; do
+    if [[ -n "${value}" ]]; then
+      msg="${msg//${value}/[REDACTED]}"
+    fi
+  done
+  printf '%s' "${msg}"
+}
+
+cleanup() {
+  if [[ -n "${RENDERED_STACK:-}" ]] && [[ -f "${RENDERED_STACK}" ]]; then
+    rm -f "${RENDERED_STACK}"
+  fi
 }
 
 require_cmd() {
@@ -287,8 +308,17 @@ ensure_bind_dirs_exist_on_all_nodes() {
   log "Ensured bind directories exist: ${#bind_dirs[@]} paths on ${#targets[@]} target(s), scope=${ENSURE_BIND_DIRS_SCOPE}."
 }
 
-extract_technitium_password_from_sops() {
-  if [[ -n "${TECHNITIUM_ADMIN_PASSWORD}" ]]; then
+extract_technitium_token() {
+  if [[ -n "${TECHNITIUM_API_TOKEN_FILE}" ]]; then
+    if [[ ! -f "${TECHNITIUM_API_TOKEN_FILE}" ]]; then
+      err "TECHNITIUM_API_TOKEN_FILE not found."
+      return 1
+    fi
+    TECHNITIUM_API_TOKEN="$(tr -d '\r\n' < "${TECHNITIUM_API_TOKEN_FILE}")"
+    return 0
+  fi
+
+  if [[ -n "${TECHNITIUM_API_TOKEN}" ]]; then
     return 0
   fi
 
@@ -300,68 +330,44 @@ extract_technitium_password_from_sops() {
     return 0
   fi
 
-  TECHNITIUM_ADMIN_PASSWORD="$(sops -d --extract '["stringData"]["TECHNITIUM_ADMIN_PASSWORD"]' "${SOPS_SECRET_FILE}" 2>/dev/null || true)"
+  TECHNITIUM_API_TOKEN="$(sops -d --extract '["stringData"]["TECHNITIUM_API_TOKEN"]' "${SOPS_SECRET_FILE}" 2>/dev/null || true)"
 }
 
-technitium_api() {
+technitium_api_url() {
   local url="$1"
-  shift
-
-  local -a curl_args=(
-    -fsS
-    "$url"
-  )
 
   if [[ "${TECHNITIUM_INSECURE_TLS}" == "1" ]]; then
-    curl_args=(-k "${curl_args[@]}")
-  fi
-
-  curl "${curl_args[@]}"
-}
-
-technitium_get_token() {
-  if [[ -n "${TECHNITIUM_API_TOKEN}" ]]; then
-    echo "${TECHNITIUM_API_TOKEN}"
+    curl -fsS -K - <<EOF
+insecure
+url = "${url}"
+EOF
     return 0
   fi
 
-  if [[ -z "${TECHNITIUM_ADMIN_PASSWORD}" ]]; then
-    err "TECHNITIUM_ADMIN_PASSWORD is required for DNS upsert (or set TECHNITIUM_API_TOKEN)."
+  curl -fsS -K - <<EOF
+url = "${url}"
+EOF
+}
+
+assert_dns_token_ready() {
+  if [[ "${DNS_UPSERT}" != "1" ]]; then
+    return 0
+  fi
+  if [[ -z "${TECHNITIUM_API_TOKEN}" ]]; then
+    err "DNS_UPSERT=1 requires TECHNITIUM_API_TOKEN (token-only mode). Store TECHNITIUM_API_TOKEN in SOPS or set TECHNITIUM_API_TOKEN_FILE."
     return 1
   fi
-
-  local candidate login_url login_json token
-  local -a candidates=("${TECHNITIUM_API_BASE%/}")
-
-  if [[ "${TECHNITIUM_API_BASE}" == https://* ]]; then
-    candidates+=("http://${TECHNITIUM_API_BASE#https://}")
-  fi
-
-  for candidate in "${candidates[@]}"; do
-    login_url="${candidate}/api/user/login?user=$(urlencode "${TECHNITIUM_ADMIN_USER}")&pass=$(urlencode "${TECHNITIUM_ADMIN_PASSWORD}")"
-    login_json="$(technitium_api "${login_url}" 2>/dev/null || true)"
-    token="$(echo "${login_json}" | jq -r '.response.token // .token // empty' 2>/dev/null || true)"
-    if [[ -n "${token}" ]]; then
-      TECHNITIUM_LOGIN_BASE="${candidate}"
-      echo "${token}"
-      return 0
-    fi
-  done
-
-  err "Technitium login failed at ${TECHNITIUM_API_BASE} (and fallback, if any)."
-  return 1
 }
 
 dns_upsert_a_record() {
-  local token="$1"
-  local fqdn="$2"
-  local ip="$3"
+  local fqdn="$1"
+  local ip="$2"
 
   local base add_url add_json status msg
-  base="${TECHNITIUM_LOGIN_BASE:-${TECHNITIUM_API_BASE%/}}/api/zones/records"
+  base="${TECHNITIUM_API_BASE%/}/api/zones/records"
 
-  add_url="${base}/add?token=$(urlencode "${token}")&domain=$(urlencode "${fqdn}")&zone=$(urlencode "${TECHNITIUM_ZONE}")&type=A&ipAddress=$(urlencode "${ip}")&ttl=$(urlencode "${DNS_TTL}")&overwrite=true"
-  add_json="$(technitium_api "${add_url}" 2>&1 || true)"
+  add_url="${base}/add?token=$(urlencode "${TECHNITIUM_API_TOKEN}")&domain=$(urlencode "${fqdn}")&zone=$(urlencode "${TECHNITIUM_ZONE}")&type=A&ipAddress=$(urlencode "${ip}")&ttl=$(urlencode "${DNS_TTL}")&overwrite=true"
+  add_json="$(technitium_api_url "${add_url}" 2>&1 || true)"
   status="$(echo "${add_json}" | jq -r '.status // empty' 2>/dev/null || true)"
 
   if [[ "${status}" == "ok" ]]; then
@@ -372,10 +378,10 @@ dns_upsert_a_record() {
   msg="$(echo "${add_json}" | jq -r '.errorMessage // .message // empty' 2>/dev/null || true)"
   log "Technitium add record did not return ok (${msg:-unknown}), trying delete+add fallback."
 
-  technitium_api "${base}/delete?token=$(urlencode "${token}")&domain=$(urlencode "${fqdn}")&zone=$(urlencode "${TECHNITIUM_ZONE}")&type=A" >/dev/null 2>&1 || true
+  technitium_api_url "${base}/delete?token=$(urlencode "${TECHNITIUM_API_TOKEN}")&domain=$(urlencode "${fqdn}")&zone=$(urlencode "${TECHNITIUM_ZONE}")&type=A" >/dev/null 2>&1 || true
 
-  add_url="${base}/add?token=$(urlencode "${token}")&domain=$(urlencode "${fqdn}")&zone=$(urlencode "${TECHNITIUM_ZONE}")&type=A&ipAddress=$(urlencode "${ip}")&ttl=$(urlencode "${DNS_TTL}")"
-  add_json="$(technitium_api "${add_url}")" || {
+  add_url="${base}/add?token=$(urlencode "${TECHNITIUM_API_TOKEN}")&domain=$(urlencode "${fqdn}")&zone=$(urlencode "${TECHNITIUM_ZONE}")&type=A&ipAddress=$(urlencode "${ip}")&ttl=$(urlencode "${DNS_TTL}")"
+  add_json="$(technitium_api_url "${add_url}")" || {
     err "DNS add failed for ${fqdn}"
     return 1
   }
@@ -400,6 +406,146 @@ validate_stack_render() {
   envsubst < "${STACK_FILE}" > "${rendered}"
   docker compose -f "${rendered}" config >/dev/null
   log "Rendered stack validated: ${rendered}"
+}
+
+check_unresolved_rendered_vars() {
+  local unresolved
+  unresolved="$(grep -oE '\$\{[A-Za-z_][A-Za-z0-9_]*\}' "${RENDERED_STACK}" | sort -u || true)"
+  if [[ -n "${unresolved}" ]]; then
+    err "Rendered stack still contains unresolved variables:"
+    while IFS= read -r line; do
+      err "  ${line}"
+    done <<<"${unresolved}"
+    return 1
+  fi
+  return 0
+}
+
+check_inline_sensitive_literals() {
+  python3 - "${COMPOSE_FILE}" "${STACK_FILE}" "${RENDERED_STACK}" <<'PY'
+import re
+import sys
+import yaml
+
+SENSITIVE = re.compile(r"(PASSWORD|PASSWD|TOKEN|SECRET|API[_-]?KEY|PRIVATE[_-]?KEY|AUTH)", re.I)
+
+def scan_env(env, file_name, service_name, issues):
+    if isinstance(env, dict):
+        items = env.items()
+    elif isinstance(env, list):
+        items = []
+        for item in env:
+            if isinstance(item, str) and "=" in item:
+                k, v = item.split("=", 1)
+                items.append((k, v))
+    else:
+        items = []
+
+    for key, value in items:
+        key = str(key)
+        value = "" if value is None else str(value)
+        if not SENSITIVE.search(key):
+            continue
+        if key.endswith("_FILE"):
+            continue
+        if value.startswith("${") or value == "":
+            continue
+        if value.startswith("/run/secrets/"):
+            continue
+        issues.append(f"{file_name}:{service_name}: inline sensitive literal in env '{key}'")
+
+def scan(path, issues):
+    with open(path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or {}
+    services = data.get("services") or {}
+    if not isinstance(services, dict):
+        return
+    for svc_name, svc_cfg in services.items():
+        if not isinstance(svc_cfg, dict):
+            continue
+        scan_env(svc_cfg.get("environment"), path, svc_name, issues)
+
+issues = []
+for p in sys.argv[1:]:
+    scan(p, issues)
+
+if issues:
+    for i in sorted(set(issues)):
+        print(i)
+    sys.exit(1)
+PY
+}
+
+check_external_secrets_exist() {
+  local manager_target
+  manager_target="$(resolve_manager_target)"
+  mapfile -t external_secrets < <(python3 - "${RENDERED_STACK}" <<'PY'
+import sys
+import yaml
+
+path = sys.argv[1]
+with open(path, "r", encoding="utf-8") as f:
+    data = yaml.safe_load(f) or {}
+
+secrets = data.get("secrets") or {}
+if isinstance(secrets, dict):
+    for key, cfg in secrets.items():
+        if not isinstance(cfg, dict):
+            continue
+        if cfg.get("external"):
+            name = cfg.get("name") or key
+            print(name)
+PY
+)
+
+  if [[ "${#external_secrets[@]}" -eq 0 ]]; then
+    return 0
+  fi
+
+  local missing=0
+  local secret_name
+  for secret_name in "${external_secrets[@]}"; do
+    if ! ssh_cmd "${manager_target}" "docker secret inspect '${secret_name}' >/dev/null 2>&1"; then
+      err "Missing external Swarm secret: ${secret_name}"
+      missing=1
+    fi
+  done
+  if [[ "${missing}" -eq 1 ]]; then
+    err "Add missing secrets to SOPS + scripts/swarm-sync-secrets.sh, then run make swarm-sync-secrets."
+    return 1
+  fi
+  return 0
+}
+
+run_preflight() {
+  if [[ "${PREFLIGHT}" != "1" ]]; then
+    log "PREFLIGHT=0, skipping preflight checks."
+    return 0
+  fi
+
+  local failures=0
+
+  if ! check_unresolved_rendered_vars; then
+    failures=1
+  fi
+
+  if ! check_inline_sensitive_literals; then
+    err "Inline secrets detected. Move values to Swarm secrets/SOPS and reference via *_FILE or /run/secrets mounts."
+    failures=1
+  fi
+
+  if [[ "${PREFLIGHT_STRICT}" == "1" ]] && [[ "${DEPLOY}" == "1" ]]; then
+    if ! check_external_secrets_exist; then
+      failures=1
+    fi
+  fi
+
+  if [[ "${failures}" -ne 0 ]]; then
+    err "Preflight failed."
+    return 1
+  fi
+  log "Preflight checks passed."
+  return 0
 }
 
 convert_stack() {
@@ -461,6 +607,8 @@ deploy_stack() {
 }
 
 main() {
+  trap cleanup EXIT
+
   if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     usage
     exit 0
@@ -489,7 +637,7 @@ main() {
 
   load_env
   derive_names
-  extract_technitium_password_from_sops
+  extract_technitium_token
 
   log "Stack name: ${STACK_NAME}"
   log "App host template: ${APP_HOST}"
@@ -498,12 +646,20 @@ main() {
 
   convert_stack
   validate_stack_render
-  ensure_bind_dirs_exist_on_all_nodes
+  run_preflight
+
+  if [[ "${PREFLIGHT_ONLY}" == "1" ]]; then
+    log "PREFLIGHT_ONLY=1, skipping DNS/deploy."
+    return 0
+  fi
+
+  if [[ "${DEPLOY}" == "1" ]]; then
+    ensure_bind_dirs_exist_on_all_nodes
+  fi
 
   if [[ "${DNS_UPSERT}" == "1" ]]; then
-    local token
-    token="$(technitium_get_token)"
-    dns_upsert_a_record "${token}" "${APP_HOST_RESOLVED}" "${TRAEFIK_VIP}"
+    assert_dns_token_ready
+    dns_upsert_a_record "${APP_HOST_RESOLVED}" "${TRAEFIK_VIP}"
     verify_dns
   else
     log "DNS_UPSERT=0, skipping DNS automation."

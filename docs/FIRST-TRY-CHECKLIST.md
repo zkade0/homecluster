@@ -30,6 +30,7 @@ Fill these before first Swarm bootstrap to maximize success.
   - optional non-secret local overrides (non-domain values)
 - `swarm/secrets/cluster-secrets.sops.yaml`
   - set encrypted values used by Swarm secrets (`ACME_EMAIL`, `CLOUDFLARE_API_TOKEN`, `GRAFANA_ADMIN_PASSWORD`, `VAULTWARDEN_ADMIN_TOKEN`, etc.)
+  - for compose onboarding DNS automation, set `TECHNITIUM_API_TOKEN`
 - `.sops.yaml`
   - set your real age recipient
 
