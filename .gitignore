@@ -1,0 +1,19 @@
+# SOPS age keys and secrets
+.agekey
+age.agekey
+
+# Tooling
+.env
+*.log
+.DS_Store
+.direnv/
+dist/
+result
+result-*
+docs/NODE-DISK-INVENTORY.md
+nixos/hosts.nix.bak.*
+swarm/env/*.local
+
+# Editor
+.vscode/
+.idea/

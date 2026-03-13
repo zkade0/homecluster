@@ -1,0 +1,144 @@
+services:
+  romm:
+    image: ghcr.io/rommapp/romm:latest
+    environment:
+      TZ: ${TIMEZONE}
+      DB_HOST: romm-db
+      DB_NAME: romm
+      DB_USER: romm-user
+      DB_PASSWD: ${ROMM_DB_PASSWORD}
+      ROMM_DB_DRIVER: mariadb
+      ROMM_AUTH_SECRET_KEY: ${ROMM_AUTH_SECRET_KEY}
+      SCREENSCRAPER_USER: ${SCREENSCRAPER_USER}
+      SCREENSCRAPER_PASSWORD: ${SCREENSCRAPER_PASSWORD}
+      RETROACHIEVEMENTS_API_KEY: ${RETROACHIEVEMENTS_API_KEY}
+      STEAMGRIDDB_API_KEY: ${STEAMGRIDDB_API_KEY}
+      HASHEOUS_API_ENABLED: "true"
+    networks:
+      - default
+      - edge
+    volumes:
+      - romm_resources:/romm/resources
+      - romm_redis_data:/redis-data
+      - romm_library:/romm/library
+      - romm_assets:/romm/assets
+      - romm_config:/romm/config
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.homelab.hostname == k8s-1
+      labels:
+        - traefik.enable=true
+        - traefik.swarm.network=edge
+        - traefik.http.routers.romm.rule=Host(`romm.${BASE_DOMAIN}`)
+        - traefik.http.routers.romm.entrypoints=web
+        - traefik.http.routers.romm.middlewares=romm-https-redirect
+        - traefik.http.middlewares.romm-https-redirect.redirectscheme.scheme=https
+        - traefik.http.middlewares.romm-https-redirect.redirectscheme.permanent=true
+        - traefik.http.routers.romm-secure.rule=Host(`romm.${BASE_DOMAIN}`)
+        - traefik.http.routers.romm-secure.entrypoints=websecure
+        - traefik.http.routers.romm-secure.tls=true
+        - traefik.http.routers.romm-secure.service=romm
+        - traefik.http.services.romm.loadbalancer.server.port=8080
+      restart_policy:
+        condition: any
+      update_config:
+        order: start-first
+        parallelism: 1
+
+  romm-db:
+    image: mariadb:11
+    environment:
+      TZ: ${TIMEZONE}
+      MARIADB_ROOT_PASSWORD: ${ROMM_DB_ROOT_PASSWORD}
+      MARIADB_DATABASE: romm
+      MARIADB_USER: romm-user
+      MARIADB_PASSWORD: ${ROMM_DB_PASSWORD}
+    volumes:
+      - romm_mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 30s
+      start_interval: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.labels.homelab.hostname == k8s-1
+      restart_policy:
+        condition: any
+
+networks:
+  edge:
+    external: true
+
+volumes:
+  romm_resources:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/homelab-data/romm/resources
+    labels:
+      homelab.service: romm
+      homelab.purpose: romm-resources
+      homelab.path: /romm/resources
+
+  romm_redis_data:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/homelab-data/romm/redis-data
+    labels:
+      homelab.service: romm
+      homelab.purpose: romm-redis-data
+      homelab.path: /redis-data
+
+  romm_library:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/homelab-data/romm/library
+    labels:
+      homelab.service: romm
+      homelab.purpose: romm-library
+      homelab.path: /romm/library
+
+  romm_assets:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/homelab-data/romm/assets
+    labels:
+      homelab.service: romm
+      homelab.purpose: romm-assets
+      homelab.path: /romm/assets
+
+  romm_config:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/homelab-data/romm/config
+    labels:
+      homelab.service: romm
+      homelab.purpose: romm-config
+      homelab.path: /romm/config
+
+  romm_mysql:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/homelab-data/romm/mysql
+    labels:
+      homelab.service: romm-db
+      homelab.purpose: mariadb-data
+      homelab.path: /var/lib/mysql

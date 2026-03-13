@@ -1,0 +1,35 @@
+services:
+  speedtest:
+    image: ghcr.io/librespeed/speedtest-rust:latest
+    command:
+      - --bind-address
+      - 0.0.0.0
+      - --listen-port
+      - "8080"
+      - --database-type
+      - none
+      - --redact-ips
+      - "true"
+    networks:
+      - edge
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.platform.os == linux
+      restart_policy:
+        condition: on-failure
+      update_config:
+        order: start-first
+        parallelism: 1
+      labels:
+        - traefik.enable=true
+        - traefik.swarm.network=edge
+        - traefik.http.routers.speedtest.rule=Host(`speedtest.${BASE_DOMAIN}`)
+        - traefik.http.routers.speedtest.entrypoints=web
+        - traefik.http.routers.speedtest.service=speedtest
+        - traefik.http.services.speedtest.loadbalancer.server.port=8080
+
+networks:
+  edge:
+    external: true

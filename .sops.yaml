@@ -1,0 +1,9 @@
+creation_rules:
+  - path_regex: swarm/.*\.sops\.ya?ml$
+    encrypted_regex: '^(data|stringData)$'
+    # Replace with your real age recipient after generating keys.
+    age: ["age18udfnd8hg6zev59y3u83gfj5pthxs6ngayd7dwjvf0t37ctgjstq6rhcne"]
+  - path_regex: secrets/.*\.sops\.ya?ml$
+    encrypted_regex: '^(data|stringData)$'
+    # Replace with your real age recipient after generating keys.
+    age: ["age18udfnd8hg6zev59y3u83gfj5pthxs6ngayd7dwjvf0t37ctgjstq6rhcne"]

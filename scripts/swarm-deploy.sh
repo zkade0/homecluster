@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+FLAKE_DIR="${REPO_ROOT}/nixos"
+FLAKE_REF="path:${FLAKE_DIR}"
+
+STACK_FILE="${STACK_FILE:-${REPO_ROOT}/swarm/stacks/homelab.yaml}"
+STACK_NAME="${STACK_NAME:-homelab}"
+  ENV_FILE="${ENV_FILE:-${REPO_ROOT}/swarm/env/cluster.env}"
+  ENV_LOCAL_FILE="${ENV_LOCAL_FILE:-${ENV_FILE}.local}"
+MANAGER_HOST="${MANAGER_HOST:-k8s-0}"
+MANAGER_SSH="${MANAGER_SSH:-}"
+SSH_KEY_FILE="${SSH_KEY_FILE:-}"
+SYNC_SECRETS="${SYNC_SECRETS:-1}"
+
+usage() {
+  cat <<USAGE
+Usage:
+  $0
+
+Env:
+  STACK_FILE=./swarm/stacks/homelab.yaml
+  STACK_NAME=homelab
+  ENV_FILE=./swarm/env/cluster.env
+  MANAGER_HOST=k8s-0
+  MANAGER_SSH=root@192.168.8.5     # overrides MANAGER_HOST lookup
+  SSH_KEY_FILE=/path/to/private_key
+  SYNC_SECRETS=1
+USAGE
+}
+
+require_cmd() {
+  local cmd="$1"
+  command -v "${cmd}" >/dev/null 2>&1 || {
+    echo "Missing required command: ${cmd}" >&2
+    exit 1
+  }
+}
+
+ssh_cmd() {
+  local target="$1"
+  shift
+
+  local -a args=(
+    -o BatchMode=yes
+    -o StrictHostKeyChecking=accept-new
+    -o ConnectTimeout=10
+  )
+
+  if [[ -n "${SSH_KEY_FILE}" ]]; then
+    args+=(
+      -i "${SSH_KEY_FILE}"
+      -o IdentitiesOnly=yes
+      -o PreferredAuthentications=publickey
+      -o PasswordAuthentication=no
+    )
+  fi
+
+  ssh "${args[@]}" "${target}" "$@"
+}
+
+resolve_target() {
+  if [[ -n "${MANAGER_SSH}" ]]; then
+    echo "${MANAGER_SSH}"
+    return
+  fi
+
+  local ip user
+  ip="$(nix --extra-experimental-features "nix-command flakes" eval --raw "${FLAKE_REF}#homelab.hosts.${MANAGER_HOST}.ip")"
+  user="$(nix --extra-experimental-features "nix-command flakes" eval --raw "${FLAKE_REF}#homelab.hosts.${MANAGER_HOST}.user")"
+  echo "${user}@${ip}"
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    usage
+    exit 0
+  fi
+
+  require_cmd nix
+  require_cmd ssh
+  require_cmd envsubst
+
+  if [[ ! -f "${STACK_FILE}" ]]; then
+    echo "Stack file not found: ${STACK_FILE}" >&2
+    exit 1
+  fi
+
+  if [[ ! -f "${ENV_FILE}" ]]; then
+    echo "Env file not found: ${ENV_FILE}" >&2
+    exit 1
+  fi
+
+  set -a
+  # shellcheck disable=SC1090
+  source "${ENV_FILE}"
+  if [[ -f "${ENV_LOCAL_FILE}" ]]; then
+    # shellcheck disable=SC1090
+    source "${ENV_LOCAL_FILE}"
+  fi
+  export STACK_NAME
+  set +a
+
+  local target
+  target="$(resolve_target)"
+  echo "Deploying stack ${STACK_NAME} to ${target}"
+
+  if [[ "${SYNC_SECRETS}" == "1" ]]; then
+    MANAGER_SSH="${target}" SSH_KEY_FILE="${SSH_KEY_FILE}" "${REPO_ROOT}/scripts/swarm-sync-secrets.sh"
+  fi
+
+  envsubst < "${STACK_FILE}" | ssh_cmd "${target}" \
+    "docker stack deploy --prune --with-registry-auth -c - '${STACK_NAME}'"
+
+  echo
+  echo "Services:"
+  ssh_cmd "${target}" "docker service ls"
+}
+
+main "$@"

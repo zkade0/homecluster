@@ -1,0 +1,596 @@
+networks:
+  edge:
+    external: true
+  monitoring:
+    driver: overlay
+    attachable: true
+    driver_opts:
+      encrypted: "true"
+
+volumes:
+  grafana_data:
+  prometheus_data:
+
+services:
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    hostname: "{{.Node.Hostname}}"
+    command:
+      - --path.rootfs=/host
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+)($$|/)
+    networks:
+      - monitoring
+    volumes:
+      - /:/host:ro,rslave
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.platform.os == linux
+      restart_policy:
+        condition: on-failure
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.49.2
+    command:
+      - --docker_only=true
+      - --housekeeping_interval=30s
+    networks:
+      - monitoring
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk:/dev/disk:ro
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.platform.os == linux
+      restart_policy:
+        condition: on-failure
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    entrypoint:
+      - /bin/sh
+      - -ec
+    command:
+      - |
+        cat >/tmp/prometheus.yml <<'EOF'
+        global:
+          scrape_interval: 15s
+          evaluation_interval: 15s
+
+        scrape_configs:
+          - job_name: prometheus
+            static_configs:
+              - targets:
+                  - localhost:9090
+
+          - job_name: node-exporter
+            dns_sd_configs:
+              - names:
+                  - tasks.node-exporter
+                type: A
+                port: 9100
+
+          - job_name: cadvisor
+            dns_sd_configs:
+              - names:
+                  - tasks.cadvisor
+                type: A
+                port: 8080
+        EOF
+
+        exec /bin/prometheus \
+          --config.file=/tmp/prometheus.yml \
+          --storage.tsdb.path=/prometheus \
+          --storage.tsdb.retention.time=15d
+    networks:
+      - monitoring
+    volumes:
+      - prometheus_data:/prometheus
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    user: "0"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_SERVER_ROOT_URL: http://grafana.${BASE_DOMAIN}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_PATHS_PROVISIONING: /etc/grafana/provisioning
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/swarm-overview.json
+    entrypoint:
+      - /bin/sh
+      - -ec
+    command:
+      - |
+        mkdir -p /etc/grafana/provisioning/datasources
+        mkdir -p /etc/grafana/provisioning/dashboards
+        mkdir -p /etc/grafana/provisioning/plugins
+        mkdir -p /etc/grafana/provisioning/alerting
+        mkdir -p /var/lib/grafana/dashboards
+
+        cat >/etc/grafana/provisioning/datasources/prometheus.yaml <<'EOF'
+        apiVersion: 1
+        datasources:
+          - name: Prometheus
+            type: prometheus
+            access: proxy
+            url: http://prometheus:9090
+            isDefault: true
+            editable: false
+        EOF
+
+        cat >/etc/grafana/provisioning/dashboards/dashboards.yaml <<'EOF'
+        apiVersion: 1
+        providers:
+          - name: Homelab
+            orgId: 1
+            folder: Homelab
+            type: file
+            disableDeletion: false
+            editable: true
+            options:
+              path: /var/lib/grafana/dashboards
+        EOF
+
+        cat >/var/lib/grafana/dashboards/swarm-overview.json <<'EOF'
+        {
+          "annotations": {
+            "list": [
+              {
+                "builtIn": 1,
+                "datasource": {
+                  "type": "grafana",
+                  "uid": "-- Grafana --"
+                },
+                "enable": true,
+                "hide": true,
+                "iconColor": "rgba(0, 211, 255, 1)",
+                "name": "Annotations & Alerts",
+                "type": "dashboard"
+              }
+            ]
+          },
+          "editable": true,
+          "fiscalYearStartMonth": 0,
+          "graphTooltip": 2,
+          "id": null,
+          "links": [],
+          "panels": [
+            {
+              "datasource": "Prometheus",
+              "fieldConfig": {
+                "defaults": {
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      { "color": "red", "value": null },
+                      { "color": "green", "value": 1 }
+                    ]
+                  },
+                  "unit": "none"
+                },
+                "overrides": []
+              },
+              "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+              "id": 1,
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "reduceOptions": {
+                  "calcs": [ "lastNotNull" ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "value"
+              },
+              "targets": [
+                {
+                  "expr": "count(up{job=\"node-exporter\"} == 1)",
+                  "refId": "A"
+                }
+              ],
+              "title": "Nodes Up",
+              "type": "stat"
+            },
+            {
+              "datasource": "Prometheus",
+              "fieldConfig": {
+                "defaults": {
+                  "max": 100,
+                  "min": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      { "color": "green", "value": null },
+                      { "color": "orange", "value": 70 },
+                      { "color": "red", "value": 90 }
+                    ]
+                  },
+                  "unit": "percent"
+                },
+                "overrides": []
+              },
+              "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+              "id": 2,
+              "options": {
+                "colorMode": "background",
+                "graphMode": "none",
+                "reduceOptions": {
+                  "calcs": [ "lastNotNull" ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "value"
+              },
+              "targets": [
+                {
+                  "expr": "100 - (avg(rate(node_cpu_seconds_total{job=\"node-exporter\",mode=\"idle\"}[5m])) * 100)",
+                  "refId": "A"
+                }
+              ],
+              "title": "Cluster CPU Used",
+              "type": "stat"
+            },
+            {
+              "datasource": "Prometheus",
+              "fieldConfig": {
+                "defaults": {
+                  "max": 100,
+                  "min": 0,
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      { "color": "green", "value": null },
+                      { "color": "orange", "value": 75 },
+                      { "color": "red", "value": 90 }
+                    ]
+                  },
+                  "unit": "percent"
+                },
+                "overrides": []
+              },
+              "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+              "id": 3,
+              "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "reduceOptions": {
+                  "calcs": [ "lastNotNull" ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "value"
+              },
+              "targets": [
+                {
+                  "expr": "(1 - (sum(node_memory_MemAvailable_bytes{job=\"node-exporter\"}) / sum(node_memory_MemTotal_bytes{job=\"node-exporter\"}))) * 100",
+                  "refId": "A"
+                }
+              ],
+              "title": "Cluster Memory Used",
+              "type": "stat"
+            },
+            {
+              "datasource": "Prometheus",
+              "fieldConfig": {
+                "defaults": { "unit": "suffix:Mb/s" },
+                "overrides": []
+              },
+              "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+              "id": 4,
+              "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "reduceOptions": {
+                  "calcs": [ "lastNotNull" ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "value"
+              },
+              "targets": [
+                {
+                  "expr": "sum(irate(node_network_receive_bytes_total{job=\"node-exporter\",device!~\"lo|docker.*|veth.*|br.*|vxlan.*|dummy.*\"}[1m]) * 8 / 1000000)",
+                  "refId": "A"
+                }
+              ],
+              "title": "Cluster RX",
+              "type": "stat"
+            },
+            {
+              "datasource": "Prometheus",
+              "fieldConfig": {
+                "defaults": { "unit": "suffix:Mb/s" },
+                "overrides": []
+              },
+              "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+              "id": 5,
+              "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "reduceOptions": {
+                  "calcs": [ "lastNotNull" ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "value"
+              },
+              "targets": [
+                {
+                  "expr": "sum(irate(node_network_transmit_bytes_total{job=\"node-exporter\",device!~\"lo|docker.*|veth.*|br.*|vxlan.*|dummy.*\"}[1m]) * 8 / 1000000)",
+                  "refId": "A"
+                }
+              ],
+              "title": "Cluster TX",
+              "type": "stat"
+            },
+            {
+              "datasource": "Prometheus",
+              "fieldConfig": {
+                "defaults": { "unit": "none" },
+                "overrides": []
+              },
+              "gridPos": { "h": 4, "w": 4, "x": 20, "y": 0 },
+              "id": 6,
+              "options": {
+                "colorMode": "value",
+                "graphMode": "none",
+                "reduceOptions": {
+                  "calcs": [ "lastNotNull" ],
+                  "fields": "",
+                  "values": false
+                },
+                "textMode": "value"
+              },
+              "targets": [
+                {
+                  "expr": "count(count by (container_label_com_docker_swarm_service_name) (container_memory_working_set_bytes{job=\"cadvisor\",container_label_com_docker_swarm_service_name!=\"\"}))",
+                  "refId": "A"
+                }
+              ],
+              "title": "Active Services",
+              "type": "stat"
+            },
+            {
+              "datasource": "Prometheus",
+              "fieldConfig": {
+                "defaults": { "max": 100, "min": 0, "unit": "percent" },
+                "overrides": []
+              },
+              "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+              "id": 7,
+              "options": {
+                "legend": { "displayMode": "table", "placement": "bottom" },
+                "tooltip": { "mode": "multi", "sort": "desc" }
+              },
+              "targets": [
+                {
+                  "expr": "(100 - (avg by (instance) (rate(node_cpu_seconds_total{job=\"node-exporter\",mode=\"idle\"}[5m])) * 100)) * on(instance) group_left(nodename) node_uname_info{job=\"node-exporter\"}",
+                  "legendFormat": "{{nodename}}",
+                  "refId": "A"
+                }
+              ],
+              "title": "CPU Usage by Node",
+              "type": "timeseries"
+            },
+            {
+              "datasource": "Prometheus",
+              "fieldConfig": {
+                "defaults": { "max": 100, "min": 0, "unit": "percent" },
+                "overrides": []
+              },
+              "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+              "id": 8,
+              "options": {
+                "legend": { "displayMode": "table", "placement": "bottom" },
+                "tooltip": { "mode": "multi", "sort": "desc" }
+              },
+              "targets": [
+                {
+                  "expr": "((1 - (node_memory_MemAvailable_bytes{job=\"node-exporter\"} / node_memory_MemTotal_bytes{job=\"node-exporter\"})) * 100) * on(instance) group_left(nodename) node_uname_info{job=\"node-exporter\"}",
+                  "legendFormat": "{{nodename}}",
+                  "refId": "A"
+                }
+              ],
+              "title": "Memory Usage by Node",
+              "type": "timeseries"
+            },
+            {
+              "datasource": "Prometheus",
+              "fieldConfig": {
+                "defaults": { "unit": "suffix:Mb/s" },
+                "overrides": []
+              },
+              "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+              "id": 9,
+              "options": {
+                "legend": { "displayMode": "table", "placement": "bottom" },
+                "tooltip": { "mode": "multi", "sort": "desc" }
+              },
+              "targets": [
+                {
+                  "expr": "sum by (instance) (irate(node_network_receive_bytes_total{job=\"node-exporter\",device!~\"lo|docker.*|veth.*|br.*|vxlan.*|dummy.*\"}[1m]) * 8 / 1000000) * on(instance) group_left(nodename) node_uname_info{job=\"node-exporter\"}",
+                  "legendFormat": "{{nodename}}",
+                  "refId": "A"
+                }
+              ],
+              "title": "Network RX by Node",
+              "type": "timeseries"
+            },
+            {
+              "datasource": "Prometheus",
+              "fieldConfig": {
+                "defaults": { "unit": "suffix:Mb/s" },
+                "overrides": []
+              },
+              "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+              "id": 10,
+              "options": {
+                "legend": { "displayMode": "table", "placement": "bottom" },
+                "tooltip": { "mode": "multi", "sort": "desc" }
+              },
+              "targets": [
+                {
+                  "expr": "sum by (instance) (irate(node_network_transmit_bytes_total{job=\"node-exporter\",device!~\"lo|docker.*|veth.*|br.*|vxlan.*|dummy.*\"}[1m]) * 8 / 1000000) * on(instance) group_left(nodename) node_uname_info{job=\"node-exporter\"}",
+                  "legendFormat": "{{nodename}}",
+                  "refId": "A"
+                }
+              ],
+              "title": "Network TX by Node",
+              "type": "timeseries"
+            },
+            {
+              "datasource": "Prometheus",
+              "fieldConfig": {
+                "defaults": { "unit": "cores", "min": 0 },
+                "overrides": []
+              },
+              "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+              "id": 11,
+              "options": {
+                "displayMode": "gradient",
+                "orientation": "horizontal",
+                "reduceOptions": {
+                  "calcs": [ "lastNotNull" ],
+                  "fields": "",
+                  "values": false
+                },
+                "showUnfilled": true
+              },
+              "targets": [
+                {
+                  "expr": "topk(8, label_replace(sum by (container_label_com_docker_swarm_service_name) (rate(container_cpu_usage_seconds_total{job=\"cadvisor\",container_label_com_docker_swarm_service_name!=\"\",container_label_com_docker_swarm_service_name!~\"monitoring_(cadvisor|node-exporter)|local-dns_local-dns|portainer_portainer-agent\"}[5m])), \"service\", \"$$1\", \"container_label_com_docker_swarm_service_name\", \"^[^_]+_(.*)$$\"))",
+                  "legendFormat": "{{service}}",
+                  "refId": "A"
+                }
+              ],
+              "title": "Top Services by CPU",
+              "type": "bargauge"
+            },
+            {
+              "datasource": "Prometheus",
+              "fieldConfig": {
+                "defaults": { "unit": "bytes", "min": 0 },
+                "overrides": []
+              },
+              "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+              "id": 12,
+              "options": {
+                "displayMode": "gradient",
+                "orientation": "horizontal",
+                "reduceOptions": {
+                  "calcs": [ "lastNotNull" ],
+                  "fields": "",
+                  "values": false
+                },
+                "showUnfilled": true
+              },
+              "targets": [
+                {
+                  "expr": "topk(8, label_replace(sum by (container_label_com_docker_swarm_service_name) (container_memory_working_set_bytes{job=\"cadvisor\",container_label_com_docker_swarm_service_name!=\"\",container_label_com_docker_swarm_service_name!~\"monitoring_(cadvisor|node-exporter)|local-dns_local-dns|portainer_portainer-agent\"}), \"service\", \"$$1\", \"container_label_com_docker_swarm_service_name\", \"^[^_]+_(.*)$$\"))",
+                  "legendFormat": "{{service}}",
+                  "refId": "A"
+                }
+              ],
+              "title": "Top Services by Memory",
+              "type": "bargauge"
+            },
+            {
+              "datasource": "Prometheus",
+              "fieldConfig": {
+                "defaults": {
+                  "mappings": [
+                    {
+                      "options": {
+                        "0": { "text": "Down" },
+                        "1": { "text": "Up" }
+                      },
+                      "type": "value"
+                    }
+                  ],
+                  "thresholds": {
+                    "mode": "absolute",
+                    "steps": [
+                      { "color": "red", "value": null },
+                      { "color": "green", "value": 1 }
+                    ]
+                  }
+                },
+                "overrides": []
+              },
+              "gridPos": { "h": 8, "w": 24, "x": 0, "y": 28 },
+              "id": 13,
+              "options": {
+                "cellHeight": "sm",
+                "footer": { "enablePagination": true, "show": false },
+                "showHeader": true,
+                "sortBy": [
+                  {
+                    "desc": false,
+                    "displayName": "nodename"
+                  }
+                ]
+              },
+              "targets": [
+                {
+                  "expr": "up{job=\"node-exporter\"} * on(instance) group_left(nodename) node_uname_info{job=\"node-exporter\"}",
+                  "format": "table",
+                  "refId": "A"
+                }
+              ],
+              "title": "Node Status",
+              "type": "table"
+            }
+          ],
+          "refresh": "10s",
+          "schemaVersion": 39,
+          "tags": [ "swarm", "homelab", "ops" ],
+          "templating": { "list": [] },
+          "time": { "from": "now-12h", "to": "now" },
+          "timepicker": {},
+          "timezone": "browser",
+          "title": "Swarm Command Center",
+          "uid": "swarm-overview",
+          "version": 2,
+          "weekStart": ""
+        }
+        EOF
+
+        chown -R 472:472 /etc/grafana/provisioning /var/lib/grafana
+        exec /run.sh
+    networks:
+      - edge
+      - monitoring
+    volumes:
+      - grafana_data:/var/lib/grafana
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+      labels:
+        - traefik.enable=true
+        - traefik.swarm.network=edge
+        - traefik.http.routers.grafana.rule=Host(`grafana.${BASE_DOMAIN}`)
+        - traefik.http.routers.grafana.entrypoints=web
+        - traefik.http.services.grafana.loadbalancer.server.port=3000
