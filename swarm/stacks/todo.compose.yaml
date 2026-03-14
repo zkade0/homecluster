@@ -1,0 +1,30 @@
+services:
+  todo:
+    image: ghcr.io/nkasco/dispatchtodoapp:latest
+    entrypoint:
+      - /bin/sh
+      - -c
+      - export AUTH_SECRET="$$(cat /run/secrets/DISPATCH_AUTH_SECRET)" && exec docker-entrypoint.sh sh /app/docker/entrypoint.sh
+    environment:
+      AUTH_TRUST_HOST: "true"
+      NEXTAUTH_URL: https://todo.${BASE_DOMAIN}
+      DATABASE_URL: /app/data/dispatch.db
+      TZ: ${TIMEZONE}
+    volumes:
+      - type: bind
+        source: /mnt/homelab-data/todo/data
+        target: /app/data
+    secrets:
+      - DISPATCH_AUTH_SECRET
+    networks:
+      - backend
+
+secrets:
+  DISPATCH_AUTH_SECRET:
+    external: true
+    name: homelab_dispatch_auth_secret
+
+networks:
+  backend:
+    driver: overlay
+    attachable: true

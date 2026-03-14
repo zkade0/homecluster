@@ -1,0 +1,44 @@
+services:
+  loki:
+    image: grafana/loki:3.6.7
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+      - type: bind
+        source: /mnt/homelab-data/loki/config
+        target: /etc/loki
+      - type: bind
+        source: /mnt/homelab-data/loki/data
+        target: /loki
+    networks:
+      - backend
+    deploy:
+      placement:
+        constraints:
+          - node.platform.os == linux
+          - node.hostname == k8s-0
+
+  promtail:
+    image: grafana/promtail:3.6.7
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+      - type: bind
+        source: /mnt/homelab-data/loki/promtail
+        target: /etc/promtail
+      - type: bind
+        source: /var/log
+        target: /var/log
+        read_only: true
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - backend
+    deploy:
+      mode: global
+      placement:
+        constraints:
+          - node.platform.os == linux
+
+networks:
+  backend:
+    driver: overlay
+    attachable: true

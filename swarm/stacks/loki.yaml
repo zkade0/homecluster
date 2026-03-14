@@ -1,0 +1,97 @@
+services:
+  loki:
+    image: grafana/loki:3.6.7
+    command: -config.file=/etc/loki/local-config.yaml
+    volumes:
+    - type: bind
+      source: /mnt/homelab-data/loki/config
+      target: /etc/loki
+    - type: bind
+      source: /mnt/homelab-data/loki/data
+      target: /loki
+    networks:
+    - backend
+    - edge
+    deploy:
+      placement:
+        constraints:
+        - node.platform.os == linux
+        - node.hostname == k8s-0
+      labels:
+      - traefik.enable=true
+      - traefik.http.middlewares.loki-https-redirect.redirectscheme.permanent=true
+      - traefik.http.middlewares.loki-https-redirect.redirectscheme.scheme=https
+      - traefik.http.routers.loki-secure.entrypoints=websecure
+      - traefik.http.routers.loki-secure.rule=Host(`${STACK_NAME}.${BASE_DOMAIN}`)
+      - traefik.http.routers.loki-secure.service=loki
+      - traefik.http.routers.loki-secure.tls=true
+      - traefik.http.routers.loki.entrypoints=web
+      - traefik.http.routers.loki.middlewares=loki-https-redirect
+      - traefik.http.routers.loki.rule=Host(`${STACK_NAME}.${BASE_DOMAIN}`)
+      - traefik.http.services.loki.loadbalancer.server.port=3100
+      - traefik.swarm.network=edge
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: any
+      update_config:
+        order: stop-first
+        parallelism: 1
+    environment:
+      TZ: ${TIMEZONE}
+  promtail:
+    image: grafana/promtail:3.6.7
+    command: -config.file=/etc/promtail/config.yml
+    volumes:
+    - type: bind
+      source: /mnt/homelab-data/loki/promtail
+      target: /etc/promtail
+    - type: bind
+      source: /var/log
+      target: /var/log
+      read_only: true
+    - promtail_containers:/var/lib/docker/containers:ro
+    - promtail_docker_sock:/var/run/docker.sock:ro
+    networks:
+    - backend
+    deploy:
+      mode: global
+      placement:
+        constraints:
+        - node.platform.os == linux
+      restart_policy:
+        condition: any
+      update_config:
+        order: stop-first
+        parallelism: 1
+    environment:
+      TZ: ${TIMEZONE}
+volumes:
+  promtail_containers:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/homelab-data/loki/promtail-containers
+    labels:
+      homelab.service: promtail
+      homelab.purpose: promtail-containers-data
+      homelab.path: /var/lib/docker/containers
+  promtail_docker_sock:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/homelab-data/loki/promtail-docker-sock
+    labels:
+      homelab.service: promtail
+      homelab.purpose: promtail-docker-sock-data
+      homelab.path: /var/run/docker.sock
+networks:
+  backend:
+    driver: overlay
+    attachable: true
+    driver_opts:
+      encrypted: 'true'
+  edge:
+    external: true

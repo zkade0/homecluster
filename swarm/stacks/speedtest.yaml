@@ -1,35 +1,58 @@
 services:
   speedtest:
-    image: ghcr.io/librespeed/speedtest-rust:latest
-    command:
-      - --bind-address
-      - 0.0.0.0
-      - --listen-port
-      - "8080"
-      - --database-type
-      - none
-      - --redact-ips
-      - "true"
+    image: lscr.io/linuxserver/speedtest-tracker:latest
+    entrypoint:
+    - /bin/sh
+    - -c
+    - export APP_KEY="$$(cat /run/secrets/SPEEDTEST_TRACKER_APP_KEY)" && exec /init
+    environment:
+      PUID: '1000'
+      PGID: '1000'
+      TZ: ${TIMEZONE}
+      APP_URL: https://speedtest.${BASE_DOMAIN}
+      DB_CONNECTION: sqlite
+    volumes:
+    - type: bind
+      source: /mnt/homelab-data/speedtest/config
+      target: /config
+    secrets:
+    - SPEEDTEST_TRACKER_APP_KEY
     networks:
-      - edge
+    - backend
+    - edge
     deploy:
+      labels:
+      - traefik.enable=true
+      - traefik.http.middlewares.speedtest-https-redirect.redirectscheme.permanent=true
+      - traefik.http.middlewares.speedtest-https-redirect.redirectscheme.scheme=https
+      - traefik.http.routers.speedtest-secure.entrypoints=websecure
+      - traefik.http.routers.speedtest-secure.rule=Host(`${STACK_NAME}.${BASE_DOMAIN}`)
+      - traefik.http.routers.speedtest-secure.service=speedtest
+      - traefik.http.routers.speedtest-secure.tls=true
+      - traefik.http.routers.speedtest.entrypoints=web
+      - traefik.http.routers.speedtest.middlewares=speedtest-https-redirect
+      - traefik.http.routers.speedtest.rule=Host(`${STACK_NAME}.${BASE_DOMAIN}`)
+      - traefik.http.services.speedtest.loadbalancer.server.port=80
+      - traefik.swarm.network=edge
+      mode: replicated
       replicas: 1
       placement:
         constraints:
-          - node.platform.os == linux
+        - node.platform.os == linux
       restart_policy:
-        condition: on-failure
+        condition: any
       update_config:
-        order: start-first
+        order: stop-first
         parallelism: 1
-      labels:
-        - traefik.enable=true
-        - traefik.swarm.network=edge
-        - traefik.http.routers.speedtest.rule=Host(`speedtest.${BASE_DOMAIN}`)
-        - traefik.http.routers.speedtest.entrypoints=web
-        - traefik.http.routers.speedtest.service=speedtest
-        - traefik.http.services.speedtest.loadbalancer.server.port=8080
-
+secrets:
+  SPEEDTEST_TRACKER_APP_KEY:
+    external: true
+    name: homelab_speedtest_tracker_app_key
 networks:
+  backend:
+    driver: overlay
+    attachable: true
+    driver_opts:
+      encrypted: 'true'
   edge:
     external: true

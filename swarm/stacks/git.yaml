@@ -1,0 +1,48 @@
+services:
+  gitweb:
+    image: mlan/gitweb:latest
+    environment:
+      PROJECTROOT: /var/lib/git/repositories
+      PROJECTS_LIST: ''
+      TZ: ${TIMEZONE}
+    volumes:
+    - type: bind
+      source: /mnt/homelab-data/forgejo/data/git
+      target: /var/lib/git
+      read_only: true
+    networks:
+    - backend
+    - edge
+    deploy:
+      placement:
+        constraints:
+        - node.platform.os == linux
+        - node.hostname == k8s-0
+      labels:
+      - traefik.enable=true
+      - traefik.http.middlewares.git-https-redirect.redirectscheme.permanent=true
+      - traefik.http.middlewares.git-https-redirect.redirectscheme.scheme=https
+      - traefik.http.routers.git-secure.entrypoints=websecure
+      - traefik.http.routers.git-secure.rule=Host(`${STACK_NAME}.${BASE_DOMAIN}`)
+      - traefik.http.routers.git-secure.service=git
+      - traefik.http.routers.git-secure.tls=true
+      - traefik.http.routers.git.entrypoints=web
+      - traefik.http.routers.git.middlewares=git-https-redirect
+      - traefik.http.routers.git.rule=Host(`${STACK_NAME}.${BASE_DOMAIN}`)
+      - traefik.http.services.git.loadbalancer.server.port=80
+      - traefik.swarm.network=edge
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: any
+      update_config:
+        order: stop-first
+        parallelism: 1
+networks:
+  backend:
+    driver: overlay
+    attachable: true
+    driver_opts:
+      encrypted: 'true'
+  edge:
+    external: true

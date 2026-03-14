@@ -1,0 +1,31 @@
+services:
+  speedtest:
+    image: lscr.io/linuxserver/speedtest-tracker:latest
+    entrypoint:
+      - /bin/sh
+      - -c
+      - export APP_KEY="$$(cat /run/secrets/SPEEDTEST_TRACKER_APP_KEY)" && exec /init
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: ${TIMEZONE}
+      APP_URL: https://speedtest.${BASE_DOMAIN}
+      DB_CONNECTION: sqlite
+    volumes:
+      - type: bind
+        source: /mnt/homelab-data/speedtest/config
+        target: /config
+    secrets:
+      - SPEEDTEST_TRACKER_APP_KEY
+    networks:
+      - backend
+
+secrets:
+  SPEEDTEST_TRACKER_APP_KEY:
+    external: true
+    name: homelab_speedtest_tracker_app_key
+
+networks:
+  backend:
+    driver: overlay
+    attachable: true

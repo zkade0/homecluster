@@ -1,0 +1,64 @@
+services:
+  nextcloud:
+    image: docker.io/library/nextcloud:stable-apache
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD_FILE: /run/secrets/NEXTCLOUD_DB_PASSWORD
+      REDIS_HOST: redis
+      NEXTCLOUD_ADMIN_USER: admin
+      NEXTCLOUD_ADMIN_PASSWORD_FILE: /run/secrets/NEXTCLOUD_ADMIN_PASSWORD
+      NEXTCLOUD_TRUSTED_DOMAINS: nextcloud.kadenzobel.com
+      TZ: ${TIMEZONE}
+    volumes:
+      - type: bind
+        source: /mnt/homelab-data/nextcloud/app
+        target: /var/www/html
+      - type: bind
+        source: /mnt/homelab-data/nextcloud/data
+        target: /var/www/html/data
+    secrets:
+      - NEXTCLOUD_DB_PASSWORD
+      - NEXTCLOUD_ADMIN_PASSWORD
+    networks:
+      - backend
+
+  db:
+    image: docker.io/library/postgres:16-alpine
+    environment:
+      POSTGRES_DB: nextcloud
+      POSTGRES_USER: nextcloud
+      POSTGRES_PASSWORD_FILE: /run/secrets/NEXTCLOUD_DB_PASSWORD
+      TZ: ${TIMEZONE}
+    volumes:
+      - type: bind
+        source: /mnt/homelab-data/nextcloud/db
+        target: /var/lib/postgresql/data
+    secrets:
+      - NEXTCLOUD_DB_PASSWORD
+    networks:
+      - backend
+
+  redis:
+    image: docker.io/library/redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - type: bind
+        source: /mnt/homelab-data/nextcloud/redis
+        target: /data
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: overlay
+    attachable: true
+
+secrets:
+  NEXTCLOUD_DB_PASSWORD:
+    external: true
+    name: homelab_nextcloud_db_password
+  NEXTCLOUD_ADMIN_PASSWORD:
+    external: true
+    name: homelab_nextcloud_admin_password

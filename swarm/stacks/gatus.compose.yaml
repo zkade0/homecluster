@@ -1,0 +1,30 @@
+services:
+  gatus:
+    image: ghcr.io/twin/gatus:v5.35.0
+    environment:
+      TZ: ${TIMEZONE}
+      GATUS_CONFIG_PATH: /config/config.yaml
+    extra_hosts:
+      - budget.${BASE_DOMAIN}:192.168.8.11
+      - speedtest.${BASE_DOMAIN}:192.168.8.11
+      - mealie.${BASE_DOMAIN}:192.168.8.11
+      - todo.${BASE_DOMAIN}:192.168.8.11
+      - n8n.${BASE_DOMAIN}:192.168.8.11
+      - forgejo.${BASE_DOMAIN}:192.168.8.11
+      - nextcloud.${BASE_DOMAIN}:192.168.8.11
+    volumes:
+      - type: bind
+        source: /mnt/homelab-data/gatus/config
+        target: /config
+    networks:
+      - backend
+    deploy:
+      placement:
+        constraints:
+          - node.platform.os == linux
+          - node.hostname == k8s-0
+
+networks:
+  backend:
+    driver: overlay
+    attachable: true

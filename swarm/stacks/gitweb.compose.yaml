@@ -1,0 +1,24 @@
+services:
+  gitweb:
+    image: mlan/gitweb:latest
+    environment:
+      PROJECTROOT: /var/lib/git/repositories
+      PROJECTS_LIST: ""
+      TZ: ${TIMEZONE}
+    volumes:
+      - type: bind
+        source: /mnt/homelab-data/forgejo/data/git
+        target: /var/lib/git
+        read_only: true
+    networks:
+      - backend
+    deploy:
+      placement:
+        constraints:
+          - node.platform.os == linux
+          - node.hostname == k8s-0
+
+networks:
+  backend:
+    driver: overlay
+    attachable: true

@@ -60,8 +60,8 @@ services:
       PAPERLESS_TIKA_ENABLED: "1"
       PAPERLESS_TIKA_GOTENBERG_ENDPOINT: http://gotenberg:3000
       PAPERLESS_TIKA_ENDPOINT: http://tika:9998
-      PAPERLESS_URL: http://paperless.${BASE_DOMAIN}
-      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
+      PAPERLESS_URL: https://paperless.${BASE_DOMAIN}
+      PAPERLESS_SECRET_KEY_FILE: /run/secrets/paperless_secret_key
       PAPERLESS_TIME_ZONE: ${TIMEZONE}
       PAPERLESS_OCR_LANGUAGE: ${PAPERLESS_OCR_LANGUAGE}
     networks:
@@ -72,6 +72,10 @@ services:
       - paperless_media:/usr/src/paperless/media
       - paperless_export:/usr/src/paperless/export
       - paperless_consume:/usr/src/paperless/consume
+    secrets:
+      - source: homelab_paperless_secret_key
+        target: paperless_secret_key
+        mode: 0400
     deploy:
       replicas: 1
       placement:
@@ -86,8 +90,16 @@ services:
       labels:
         - traefik.enable=true
         - traefik.swarm.network=edge
+        - traefik.http.middlewares.paperless-https-redirect.redirectscheme.scheme=https
+        - traefik.http.middlewares.paperless-https-redirect.redirectscheme.permanent=true
         - traefik.http.routers.paperless.rule=Host(`paperless.${BASE_DOMAIN}`)
         - traefik.http.routers.paperless.entrypoints=web
+        - traefik.http.routers.paperless.middlewares=paperless-https-redirect
+        - traefik.http.routers.paperless-secure.rule=Host(`paperless.${BASE_DOMAIN}`)
+        - traefik.http.routers.paperless-secure.entrypoints=websecure
+        - traefik.http.routers.paperless-secure.tls=true
+        - traefik.http.routers.paperless-secure.tls.certresolver=le
+        - traefik.http.routers.paperless-secure.service=paperless
         - traefik.http.routers.paperless.service=paperless
         - traefik.http.services.paperless.loadbalancer.server.port=8000
 
@@ -133,3 +145,7 @@ volumes:
       type: none
       o: bind
       device: /mnt/homelab-data/paperless/redis
+
+secrets:
+  homelab_paperless_secret_key:
+    external: true

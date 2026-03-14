@@ -11,10 +11,6 @@ services:
       source: /mnt/homelab-data/jellyfin/tv
       target: /tv
       read_only: true
-    # - type: bind
-    #   source: /mnt/homelab-data/jellyfin/fonts
-    #   target: /usr/local/share/fonts/custom
-    #   read_only: true
     environment:
     - JELLYFIN_PublishedServerUrl=https://${STACK_NAME}.${BASE_DOMAIN}
     - TZ=${TIMEZONE}
@@ -34,7 +30,7 @@ services:
       - traefik.http.routers.jellyfin.entrypoints=web
       - traefik.http.routers.jellyfin.middlewares=jellyfin-https-redirect
       - traefik.http.routers.jellyfin.rule=Host(`${STACK_NAME}.${BASE_DOMAIN}`)
-      - traefik.http.services.jellyfin.loadbalancer.server.port=8096
+      - traefik.http.services.jellyfin.loadbalancer.server.port=80
       - traefik.swarm.network=edge
       mode: replicated
       replicas: 1

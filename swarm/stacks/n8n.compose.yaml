@@ -1,0 +1,39 @@
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.11.4
+    environment:
+      TZ: ${TIMEZONE}
+      N8N_HOST: n8n.${BASE_DOMAIN}
+      N8N_PROTOCOL: https
+      N8N_PORT: "5678"
+      WEBHOOK_URL: https://n8n.${BASE_DOMAIN}/
+      N8N_BASIC_AUTH_ACTIVE: "true"
+      N8N_BASIC_AUTH_USER_FILE: /run/secrets/N8N_BASIC_AUTH_USER
+      N8N_BASIC_AUTH_PASSWORD_FILE: /run/secrets/N8N_BASIC_AUTH_PASSWORD
+      N8N_ENCRYPTION_KEY_FILE: /run/secrets/N8N_ENCRYPTION_KEY
+    volumes:
+      - type: bind
+        source: /mnt/homelab-data/n8n/data
+        target: /home/node/.n8n
+    secrets:
+      - N8N_BASIC_AUTH_USER
+      - N8N_BASIC_AUTH_PASSWORD
+      - N8N_ENCRYPTION_KEY
+    networks:
+      - backend
+
+secrets:
+  N8N_BASIC_AUTH_USER:
+    external: true
+    name: homelab_n8n_basic_auth_user
+  N8N_BASIC_AUTH_PASSWORD:
+    external: true
+    name: homelab_n8n_basic_auth_password
+  N8N_ENCRYPTION_KEY:
+    external: true
+    name: homelab_n8n_encryption_key
+
+networks:
+  backend:
+    driver: overlay
+    attachable: true

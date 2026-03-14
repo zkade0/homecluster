@@ -1,0 +1,16 @@
+services:
+  budget:
+    image: actualbudget/actual-server:latest
+    environment:
+      TZ: ${TIMEZONE}
+    volumes:
+      - type: bind
+        source: /mnt/homelab-data/budget/data
+        target: /data
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: overlay
+    attachable: true

@@ -1,0 +1,22 @@
+services:
+  mealie:
+    image: ghcr.io/mealie-recipes/mealie:v3.12.0
+    environment:
+      TZ: ${TIMEZONE}
+      BASE_URL: https://mealie.${BASE_DOMAIN}
+      ALLOW_SIGNUP: "false"
+      PUID: "1000"
+      PGID: "1000"
+      MAX_WORKERS: "1"
+      WEB_CONCURRENCY: "1"
+    volumes:
+      - type: bind
+        source: /mnt/homelab-data/mealie/data
+        target: /app/data
+    networks:
+      - backend
+
+networks:
+  backend:
+    driver: overlay
+    attachable: true

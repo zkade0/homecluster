@@ -1,24 +1,31 @@
-networks:
-  edge:
-    name: edge
-    driver: overlay
-    attachable: true
-    driver_opts:
-      encrypted: "true"
-
 services:
   traefik:
     image: traefik:v3.3
     command:
-      - --providers.swarm=true
-      - --providers.swarm.exposedbydefault=false
-      - --providers.swarm.network=edge
-      - --entrypoints.web.address=:80
-      - --entrypoints.websecure.address=:443
-      - --api.dashboard=true
-      - --api.insecure=false
-      - --ping=true
-      - --accesslog=true
+      - /bin/sh
+      - -ec
+      - |
+        CF_DNS_API_TOKEN="$$(cat /run/secrets/homelab_cloudflare_api_token)" exec traefik \
+          --providers.swarm=true \
+          --providers.swarm.exposedbydefault=false \
+          --providers.swarm.network=edge \
+          --entrypoints.web.address=:80 \
+          --entrypoints.web.http.redirections.entrypoint.to=websecure \
+          --entrypoints.web.http.redirections.entrypoint.scheme=https \
+          --entrypoints.websecure.address=:443 \
+          --entrypoints.websecure.http.tls=true \
+          --entrypoints.websecure.http.tls.certresolver=le \
+          --entrypoints.websecure.http.tls.domains[0].main="${BASE_DOMAIN}" \
+          --entrypoints.websecure.http.tls.domains[0].sans="*.${BASE_DOMAIN}" \
+          --api.dashboard=true \
+          --api.insecure=false \
+          --ping=true \
+          --accesslog=true \
+          --certificatesresolvers.le.acme.email="$$(cat /run/secrets/homelab_acme_email)" \
+          --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json \
+          --certificatesresolvers.le.acme.dnschallenge=true \
+          --certificatesresolvers.le.acme.dnschallenge.provider=cloudflare \
+          --certificatesresolvers.le.acme.dnschallenge.delaybeforecheck=20
     ports:
       - target: 80
         published: 80
@@ -32,10 +39,49 @@ services:
       - edge
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
+    secrets:
+      - homelab_acme_email
+      - homelab_cloudflare_api_token
     deploy:
-      mode: global
+      mode: replicated
+      replicas: 1
       placement:
         constraints:
           - node.platform.os == linux
+          - node.hostname == k8s-0
       restart_policy:
         condition: on-failure
+      labels:
+        - traefik.enable=true
+        - traefik.swarm.network=edge
+        - traefik.http.routers.traefik.rule=Host(`traefik.${BASE_DOMAIN}`)
+        - traefik.http.routers.traefik.entrypoints=websecure
+        - traefik.http.routers.traefik.tls=true
+        - traefik.http.routers.traefik.tls.certresolver=le
+        - traefik.http.routers.traefik.tls.domains[0].main=${BASE_DOMAIN}
+        - traefik.http.routers.traefik.tls.domains[0].sans=*.${BASE_DOMAIN}
+        - traefik.http.routers.traefik.service=api@internal
+        - traefik.http.services.traefik.loadbalancer.server.port=8080
+
+volumes:
+  traefik_letsencrypt:
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: /mnt/homelab-data/traefik/letsencrypt
+
+networks:
+  edge:
+    name: edge
+    driver: overlay
+    attachable: true
+    driver_opts:
+      encrypted: "true"
+
+secrets:
+  homelab_acme_email:
+    external: true
+  homelab_cloudflare_api_token:
+    external: true

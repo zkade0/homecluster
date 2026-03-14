@@ -1,0 +1,66 @@
+services:
+  n8n:
+    image: docker.n8n.io/n8nio/n8n:2.11.4
+    environment:
+      TZ: ${TIMEZONE}
+      N8N_HOST: n8n.${BASE_DOMAIN}
+      N8N_PROTOCOL: https
+      N8N_PORT: '5678'
+      WEBHOOK_URL: https://n8n.${BASE_DOMAIN}/
+      N8N_BASIC_AUTH_ACTIVE: 'true'
+      N8N_BASIC_AUTH_USER_FILE: /run/secrets/N8N_BASIC_AUTH_USER
+      N8N_BASIC_AUTH_PASSWORD_FILE: /run/secrets/N8N_BASIC_AUTH_PASSWORD
+      N8N_ENCRYPTION_KEY_FILE: /run/secrets/N8N_ENCRYPTION_KEY
+    volumes:
+    - type: bind
+      source: /mnt/homelab-data/n8n/data
+      target: /home/node/.n8n
+    secrets:
+    - N8N_BASIC_AUTH_USER
+    - N8N_BASIC_AUTH_PASSWORD
+    - N8N_ENCRYPTION_KEY
+    networks:
+    - backend
+    - edge
+    deploy:
+      labels:
+      - traefik.enable=true
+      - traefik.http.middlewares.n8n-https-redirect.redirectscheme.permanent=true
+      - traefik.http.middlewares.n8n-https-redirect.redirectscheme.scheme=https
+      - traefik.http.routers.n8n-secure.entrypoints=websecure
+      - traefik.http.routers.n8n-secure.rule=Host(`${STACK_NAME}.${BASE_DOMAIN}`)
+      - traefik.http.routers.n8n-secure.service=n8n
+      - traefik.http.routers.n8n-secure.tls=true
+      - traefik.http.routers.n8n.entrypoints=web
+      - traefik.http.routers.n8n.middlewares=n8n-https-redirect
+      - traefik.http.routers.n8n.rule=Host(`${STACK_NAME}.${BASE_DOMAIN}`)
+      - traefik.http.services.n8n.loadbalancer.server.port=5678
+      - traefik.swarm.network=edge
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+        - node.platform.os == linux
+      restart_policy:
+        condition: any
+      update_config:
+        order: stop-first
+        parallelism: 1
+secrets:
+  N8N_BASIC_AUTH_USER:
+    external: true
+    name: homelab_n8n_basic_auth_user
+  N8N_BASIC_AUTH_PASSWORD:
+    external: true
+    name: homelab_n8n_basic_auth_password
+  N8N_ENCRYPTION_KEY:
+    external: true
+    name: homelab_n8n_encryption_key
+networks:
+  backend:
+    driver: overlay
+    attachable: true
+    driver_opts:
+      encrypted: 'true'
+  edge:
+    external: true

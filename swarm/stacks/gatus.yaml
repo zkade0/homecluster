@@ -1,0 +1,54 @@
+services:
+  gatus:
+    image: ghcr.io/twin/gatus:v5.35.0
+    environment:
+      TZ: ${TIMEZONE}
+      GATUS_CONFIG_PATH: /config/config.yaml
+    extra_hosts:
+    - budget.${BASE_DOMAIN}:192.168.8.11
+    - speedtest.${BASE_DOMAIN}:192.168.8.11
+    - mealie.${BASE_DOMAIN}:192.168.8.11
+    - todo.${BASE_DOMAIN}:192.168.8.11
+    - n8n.${BASE_DOMAIN}:192.168.8.11
+    - forgejo.${BASE_DOMAIN}:192.168.8.11
+    - nextcloud.${BASE_DOMAIN}:192.168.8.11
+    volumes:
+    - type: bind
+      source: /mnt/homelab-data/gatus/config
+      target: /config
+    networks:
+    - backend
+    - edge
+    deploy:
+      placement:
+        constraints:
+        - node.platform.os == linux
+        - node.hostname == k8s-0
+      labels:
+      - traefik.enable=true
+      - traefik.http.middlewares.gatus-https-redirect.redirectscheme.permanent=true
+      - traefik.http.middlewares.gatus-https-redirect.redirectscheme.scheme=https
+      - traefik.http.routers.gatus-secure.entrypoints=websecure
+      - traefik.http.routers.gatus-secure.rule=Host(`${STACK_NAME}.${BASE_DOMAIN}`)
+      - traefik.http.routers.gatus-secure.service=gatus
+      - traefik.http.routers.gatus-secure.tls=true
+      - traefik.http.routers.gatus.entrypoints=web
+      - traefik.http.routers.gatus.middlewares=gatus-https-redirect
+      - traefik.http.routers.gatus.rule=Host(`${STACK_NAME}.${BASE_DOMAIN}`)
+      - traefik.http.services.gatus.loadbalancer.server.port=8080
+      - traefik.swarm.network=edge
+      mode: replicated
+      replicas: 1
+      restart_policy:
+        condition: any
+      update_config:
+        order: stop-first
+        parallelism: 1
+networks:
+  backend:
+    driver: overlay
+    attachable: true
+    driver_opts:
+      encrypted: 'true'
+  edge:
+    external: true

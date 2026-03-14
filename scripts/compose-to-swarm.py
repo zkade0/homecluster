@@ -354,6 +354,7 @@ def set_traefik_labels(service, route_name, hostname, service_port):
             f"traefik.http.routers.{route_name}-secure.rule": f"Host(`{hostname}`)",
             f"traefik.http.routers.{route_name}-secure.entrypoints": "websecure",
             f"traefik.http.routers.{route_name}-secure.tls": "true",
+            f"traefik.http.routers.{route_name}-secure.tls.certresolver": "le",
             f"traefik.http.routers.{route_name}-secure.service": route_name,
             f"traefik.http.services.{route_name}.loadbalancer.server.port": str(service_port),
         }

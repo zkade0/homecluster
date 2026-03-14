@@ -1,0 +1,44 @@
+services:
+  budget:
+    image: actualbudget/actual-server:latest
+    environment:
+      TZ: ${TIMEZONE}
+    volumes:
+    - type: bind
+      source: /mnt/homelab-data/budget/data
+      target: /data
+    networks:
+    - backend
+    - edge
+    deploy:
+      labels:
+      - traefik.enable=true
+      - traefik.http.middlewares.budget-https-redirect.redirectscheme.permanent=true
+      - traefik.http.middlewares.budget-https-redirect.redirectscheme.scheme=https
+      - traefik.http.routers.budget-secure.entrypoints=websecure
+      - traefik.http.routers.budget-secure.rule=Host(`${STACK_NAME}.${BASE_DOMAIN}`)
+      - traefik.http.routers.budget-secure.service=budget
+      - traefik.http.routers.budget-secure.tls=true
+      - traefik.http.routers.budget.entrypoints=web
+      - traefik.http.routers.budget.middlewares=budget-https-redirect
+      - traefik.http.routers.budget.rule=Host(`${STACK_NAME}.${BASE_DOMAIN}`)
+      - traefik.http.services.budget.loadbalancer.server.port=5006
+      - traefik.swarm.network=edge
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+        - node.platform.os == linux
+      restart_policy:
+        condition: any
+      update_config:
+        order: stop-first
+        parallelism: 1
+networks:
+  backend:
+    driver: overlay
+    attachable: true
+    driver_opts:
+      encrypted: 'true'
+  edge:
+    external: true

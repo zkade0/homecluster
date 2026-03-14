@@ -4,7 +4,7 @@ services:
     environment:
       TZ: ${TIMEZONE}
       DNS_SERVER_DOMAIN: dns.admin.${BASE_DOMAIN}
-      DNS_SERVER_ADMIN_PASSWORD: ${TECHNITIUM_ADMIN_PASSWORD}
+      DNS_SERVER_ADMIN_PASSWORD_FILE: /run/secrets/technitium_admin_password
       DNS_SERVER_PREFER_IPV6: "false"
       DNS_SERVER_RECURSION: AllowOnlyForPrivateNetworks
       DNS_SERVER_RECURSION_NETWORK_ACL: 192.168.0.0/16,172.16.0.0/12,10.0.0.0/8,127.0.0.0/8,::1/128,fd00::/8,fe80::/10
@@ -20,14 +20,17 @@ services:
         protocol: tcp
         mode: host
     # DNS is exposed directly; Web UI is only exposed through Traefik.
-    # Keep one active task, but allow it to run on any Linux node (no hostname pin).
+    # Run on every node so whichever node owns the VIP always has a DNS listener.
     networks:
       - edge
     volumes:
       - technitium_shared_config:/etc/dns
+    secrets:
+      - source: homelab_technitium_admin_password
+        target: technitium_admin_password
+        mode: 0400
     deploy:
-      mode: replicated
-      replicas: 1
+      mode: global
       placement:
         constraints:
           - node.platform.os == linux
@@ -39,10 +42,20 @@ services:
       labels:
         - traefik.enable=true
         - traefik.swarm.network=edge
+        - traefik.http.middlewares.technitium-https-redirect.redirectscheme.scheme=https
+        - traefik.http.middlewares.technitium-https-redirect.redirectscheme.permanent=true
         - traefik.http.routers.technitium.rule=Host(`dns.admin.${BASE_DOMAIN}`)
         - traefik.http.routers.technitium.entrypoints=web
+        - traefik.http.routers.technitium.middlewares=technitium-https-redirect
+        - traefik.http.routers.technitium-secure.rule=Host(`dns.admin.${BASE_DOMAIN}`)
+        - traefik.http.routers.technitium-secure.entrypoints=websecure
+        - traefik.http.routers.technitium-secure.tls=true
+        - traefik.http.routers.technitium-secure.tls.certresolver=le
+        - traefik.http.routers.technitium-secure.service=technitium
         - traefik.http.routers.technitium.service=technitium
         - traefik.http.services.technitium.loadbalancer.server.port=5380
+        - traefik.http.services.technitium.loadbalancer.sticky.cookie=true
+        - traefik.http.services.technitium.loadbalancer.sticky.cookie.name=technitium_session
 
 volumes:
   technitium_shared_config:
@@ -54,4 +67,8 @@ volumes:
 
 networks:
   edge:
+    external: true
+
+secrets:
+  homelab_technitium_admin_password:
     external: true

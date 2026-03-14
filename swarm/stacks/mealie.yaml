@@ -1,0 +1,50 @@
+services:
+  mealie:
+    image: ghcr.io/mealie-recipes/mealie:v3.12.0
+    environment:
+      TZ: ${TIMEZONE}
+      BASE_URL: https://mealie.${BASE_DOMAIN}
+      ALLOW_SIGNUP: 'false'
+      PUID: '1000'
+      PGID: '1000'
+      MAX_WORKERS: '1'
+      WEB_CONCURRENCY: '1'
+    volumes:
+    - type: bind
+      source: /mnt/homelab-data/mealie/data
+      target: /app/data
+    networks:
+    - backend
+    - edge
+    deploy:
+      labels:
+      - traefik.enable=true
+      - traefik.http.middlewares.mealie-https-redirect.redirectscheme.permanent=true
+      - traefik.http.middlewares.mealie-https-redirect.redirectscheme.scheme=https
+      - traefik.http.routers.mealie-secure.entrypoints=websecure
+      - traefik.http.routers.mealie-secure.rule=Host(`${STACK_NAME}.${BASE_DOMAIN}`)
+      - traefik.http.routers.mealie-secure.service=mealie
+      - traefik.http.routers.mealie-secure.tls=true
+      - traefik.http.routers.mealie.entrypoints=web
+      - traefik.http.routers.mealie.middlewares=mealie-https-redirect
+      - traefik.http.routers.mealie.rule=Host(`${STACK_NAME}.${BASE_DOMAIN}`)
+      - traefik.http.services.mealie.loadbalancer.server.port=9000
+      - traefik.swarm.network=edge
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+        - node.platform.os == linux
+      restart_policy:
+        condition: any
+      update_config:
+        order: stop-first
+        parallelism: 1
+networks:
+  backend:
+    driver: overlay
+    attachable: true
+    driver_opts:
+      encrypted: 'true'
+  edge:
+    external: true

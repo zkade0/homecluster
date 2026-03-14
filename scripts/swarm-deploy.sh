@@ -14,6 +14,7 @@ MANAGER_HOST="${MANAGER_HOST:-k8s-0}"
 MANAGER_SSH="${MANAGER_SSH:-}"
 SSH_KEY_FILE="${SSH_KEY_FILE:-}"
 SYNC_SECRETS="${SYNC_SECRETS:-1}"
+TLS_PREFLIGHT="${TLS_PREFLIGHT:-1}"
 
 usage() {
   cat <<USAGE
@@ -29,6 +30,7 @@ Env:
   MANAGER_SSH=root@192.168.8.5     # overrides MANAGER_HOST lookup
   SSH_KEY_FILE=/path/to/private_key
   SYNC_SECRETS=1
+  TLS_PREFLIGHT=1
 USAGE
 }
 
@@ -97,6 +99,34 @@ resolve_target() {
   echo "${user}@${ip}"
 }
 
+check_traefik_tls_readiness() {
+  local target="$1"
+
+  if [[ "${TLS_PREFLIGHT}" != "1" ]]; then
+    return 0
+  fi
+
+  if [[ "${STACK_NAME}" == "traefik" ]]; then
+    return 0
+  fi
+
+  if ! ssh_cmd "${target}" "docker service inspect traefik_traefik >/dev/null 2>&1"; then
+    echo "WARNING: traefik_traefik not found; skipping TLS preflight." >&2
+    return 0
+  fi
+
+  local args_json
+  args_json="$(ssh_cmd "${target}" "docker service inspect traefik_traefik --format '{{json .Spec.TaskTemplate.ContainerSpec.Args}}'")"
+
+  if [[ "${args_json}" != *"--certificatesresolvers.le.acme.storage="* ]] || \
+     [[ "${args_json}" != *"--entrypoints.websecure.http.tls.certresolver=le"* ]]; then
+    echo "ERROR: Traefik TLS preflight failed." >&2
+    echo "traefik_traefik is missing ACME/certresolver flags, so browsers may show certificate warnings." >&2
+    echo "Deploy/fix swarm/stacks/traefik.yaml first, or set TLS_PREFLIGHT=0 to bypass intentionally." >&2
+    exit 1
+  fi
+}
+
 main() {
   if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
     usage
@@ -131,6 +161,8 @@ main() {
   local target
   target="$(resolve_target)"
   echo "Deploying stack ${STACK_NAME} to ${target}"
+
+  check_traefik_tls_readiness "${target}"
 
   if [[ "${SYNC_SECRETS}" == "1" ]]; then
     MANAGER_SSH="${target}" SSH_KEY_FILE="${SSH_KEY_FILE}" "${REPO_ROOT}/scripts/swarm-sync-secrets.sh"

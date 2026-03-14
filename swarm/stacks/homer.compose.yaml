@@ -1,0 +1,25 @@
+services:
+  homer:
+    image: b4bz/homer:latest
+    environment:
+      TZ: ${TIMEZONE}
+      INIT_ASSETS: "0"
+    volumes:
+      - type: bind
+        source: /mnt/homelab-data/homer/assets
+        target: /www/assets
+    networks:
+      - backend
+    deploy:
+      placement:
+        constraints:
+          - node.platform.os == linux
+          - node.hostname == k8s-0
+      labels:
+        - traefik.http.middlewares.homer-auth.basicauth.users=${DASH_BASIC_AUTH}
+        - traefik.http.routers.homer-secure.middlewares=homer-auth
+
+networks:
+  backend:
+    driver: overlay
+    attachable: true
